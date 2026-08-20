@@ -1,0 +1,494 @@
+// GLC Hub SP — schema do banco
+// A planilha "GLC - Circuito SP" é a fonte da verdade do meta;
+// o banco é o cache estruturado que alimenta o site.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Os 11 tipos do GLC, na ordem canônica das colunas da planilha.
+/// PT: Planta, Água, Fogo, Elétrico, Incolor, Lutador, Psíquico, Dragão,
+///     Noturno, Metal, Fada (mapeamento em src/lib/types.ts)
+enum PokemonType {
+  GRASS
+  WATER
+  FIRE
+  LIGHTNING
+  COLORLESS
+  FIGHTING
+  PSYCHIC
+  DRAGON
+  DARKNESS
+  METAL
+  FAIRY
+}
+
+enum Modality {
+  PRESENCIAL
+  ONLINE
+}
+
+enum VenueKind {
+  STORE // loja física com torneio recorrente
+  EVENT // evento pontual (LAIC 2025, NZTCG, GLC Brasil...)
+}
+
+enum VenueStatus {
+  ACTIVE
+  HIATUS
+}
+
+enum RecordOrigin {
+  SHEET // importado da planilha
+  SITE  // publicado por conta de loja no site (Fase 2)
+}
+
+enum RecordStatus {
+  ACTIVE
+  MISSING_IN_SHEET // a linha sumiu da planilha (edição/remoção) — aguarda revisão
+  PENDING_REVIEW   // conflito detectado (ex.: suspeita de duplicata loja×planilha)
+}
+
+enum Role {
+  PLAYER
+  STORE
+  ADMIN
+}
+
+enum TabKind {
+  LOG_PRESENCIAL // "Dados Vitórias"
+  LOG_ONLINE     // "Dados Vitórias Online"
+  RANK           // abas de ranking derivado — só validação, nunca fonte
+  SCHEDULE       // "Programação"
+  RULES          // "Regras"
+  PLAYERS        // "Lista Jogadores"
+  DECKLISTS      // "Decklists"
+  IGNORE
+  UNCLASSIFIED   // aba nova descoberta — admin classifica
+}
+
+enum IssueKind {
+  UNKNOWN_PLAYER    // jogador criado automaticamente — confirmar/mesclar alias
+  UNKNOWN_VENUE     // loja/evento criado automaticamente
+  UNKNOWN_TYPE      // tipo não reconhecido — linha pulada
+  PARSE_WARNING     // linha com formato inesperado
+  ROW_REMOVED       // linha antes importada sumiu da planilha
+  DUPLICATE_SUSPECT // possível dupla contagem (resultado de loja × planilha)
+  RANK_MISMATCH     // ranking recalculado diverge do ranking da planilha
+  NEW_TAB           // aba nova descoberta, aguardando classificação
+}
+
+enum IssueStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TokenKind {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum DeckSource {
+  BUILDER            // montado no deck builder do site
+  TEXT               // importado de lista em texto (TCG Live / Limitless)
+  LIMITLESS          // importado por link do Limitless
+  CARDBOARD_WARRIOR  // importado por link do Cardboard Warriors
+  SHEET              // acervo inicial vindo da aba Decklists
+}
+
+enum CardCategory {
+  POKEMON
+  TRAINER
+  ENERGY
+}
+
+enum ExternalRefKind {
+  DECK           // link direto para um deck
+  PLAYER_PROFILE // link de perfil de jogador (formato real da aba Decklists)
+}
+
+// ---------------------------------------------------------------------------
+// Jogadores e aliases
+// ---------------------------------------------------------------------------
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String   @unique // nome canônico (base: aba "Lista Jogadores")
+  slug      String   @unique
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  aliases      PlayerAlias[]
+  badges       BadgeWin[]
+  claims       ProfileClaim[]
+  user         User?
+  decks        Deck[]
+  externalRefs ExternalDeckRef[]
+}
+
+/// Variações de grafia encontradas na planilha ("JV Soares" → "João Victor Soares").
+/// `normalized` = minúsculas, sem acento, espaços colapsados — chave de lookup do sync.
+model PlayerAlias {
+  id         String   @id @default(cuid())
+  alias      String
+  normalized String   @unique
+  note       String?
+  createdAt  DateTime @default(now())
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  playerId   String
+
+  @@index([playerId])
+}
+
+// ---------------------------------------------------------------------------
+// Lojas / eventos e agenda
+// ---------------------------------------------------------------------------
+
+model Venue {
+  id           String      @id @default(cuid())
+  name         String      @unique
+  slug         String      @unique
+  neighborhood String? // extraído do cabeçalho da Programação: "Citadel (Santana)"
+  address      String? // extraído da aba oculta de rank da loja ("Endereço: ...")
+  kind         VenueKind   @default(STORE)
+  status       VenueStatus @default(ACTIVE)
+  createdAt    DateTime    @default(now())
+
+  aliases     VenueAlias[]
+  slots       WeeklySlot[]
+  tournaments Tournament[]
+  badges      BadgeWin[]
+  user        User?
+}
+
+model VenueAlias {
+  id         String @id @default(cuid())
+  alias      String
+  normalized String @unique
+  venue      Venue  @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  venueId    String
+
+  @@index([venueId])
+}
+
+/// Grade semanal da aba Programação (dia × loja × horário).
+model WeeklySlot {
+  id        String   @id @default(cuid())
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  venueId   String
+  weekday   Int // 1 = segunda ... 7 = domingo
+  time      String? // texto livre da célula: "20h", "19h30", "Mensal (confirmar no grupo)"
+  updatedAt DateTime @updatedAt
+
+  @@unique([venueId, weekday])
+}
+
+/// Torneios datados: seção "Torneios especiais + Mensal/semanal" da Programação
+/// e, na Fase 2, torneios publicados por contas de loja.
+model Tournament {
+  id              String       @id @default(cuid())
+  venue           Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  venueId         String
+  date            DateTime     @db.Date
+  time            String?
+  name            String?
+  origin          RecordOrigin @default(SHEET)
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+  badges          BadgeWin[]
+
+  @@unique([venueId, date, name])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// Insígnias (cada linha do log bruto = uma insígnia)
+// ---------------------------------------------------------------------------
+
+model BadgeWin {
+  id String @id @default(cuid())
+
+  /// Chave determinística de importação idempotente:
+  /// sha256(aba | data crua | loja crua | jogador cru | tipo cru | nº da ocorrência).
+  /// Estável sob reordenação de linhas; edição vira "linha removida + linha nova"
+  /// (a removida é marcada MISSING_IN_SHEET para revisão, nunca apagada em silêncio).
+  sourceKey String @unique
+
+  tabName  String // aba de origem ("Dados Vitórias", "Dados Vitórias Online", "Seed", "Site")
+  rowIndex Int // índice da linha na última leitura (diagnóstico, não identidade)
+
+  date    DateTime? @db.Date // NULL na maior parte do histórico antigo
+  rawDate String?
+  rawVenue  String
+  rawPlayer String
+  rawType   String
+
+  modality Modality
+  type     PokemonType
+
+  player   Player @relation(fields: [playerId], references: [id])
+  playerId String
+  venue    Venue  @relation(fields: [venueId], references: [id])
+  venueId  String
+
+  tournament   Tournament? @relation(fields: [tournamentId], references: [id])
+  tournamentId String?
+
+  origin        RecordOrigin @default(SHEET)
+  status        RecordStatus @default(ACTIVE)
+  firstSyncId   String?
+  lastSeenSyncId String?
+  createdAt     DateTime     @default(now())
+
+  deckLinks DeckResultLink[]
+
+  @@index([playerId])
+  @@index([venueId])
+  @@index([type])
+  @@index([date])
+  @@index([modality, status])
+  @@index([tabName, status])
+}
+
+// ---------------------------------------------------------------------------
+// Sincronização e reconciliação
+// ---------------------------------------------------------------------------
+
+model SyncRun {
+  id         String    @id @default(cuid())
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean?
+  trigger    String // "worker" | "manual" | "cli"
+  stats      Json?
+  error      String?
+  issues     ReconciliationIssue[]
+}
+
+/// Abas descobertas dinamicamente na planilha; o admin pode reclassificar.
+model SheetTab {
+  id              String   @id @default(cuid())
+  title           String   @unique
+  kind            TabKind  @default(UNCLASSIFIED)
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  lastUpdatedNote String? // célula solta "Última atualização: DD/MM/AA HH:MM"
+}
+
+model ReconciliationIssue {
+  id         String      @id @default(cuid())
+  kind       IssueKind
+  status     IssueStatus @default(OPEN)
+  message    String
+  payload    Json?
+  syncRun    SyncRun?    @relation(fields: [syncRunId], references: [id])
+  syncRunId  String?
+  createdAt  DateTime    @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, kind])
+}
+
+/// Configurações editáveis no admin: regra de insígnia (votável pela comunidade),
+/// início da temporada 2026, intervalo do sync, cartas-ícone por tipo etc.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Contas e permissões (Fase 2 — schema já preparado)
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  displayName     String
+  role            Role      @default(PLAYER)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  // perfil de jogador reivindicado (aprovação do admin)
+  player   Player? @relation(fields: [playerId], references: [id])
+  playerId String? @unique
+
+  // conta de loja
+  venue   Venue?  @relation(fields: [venueId], references: [id])
+  venueId String? @unique
+
+  sessions AuthSession[]
+  tokens   AuthToken[]
+  claims   ProfileClaim[]
+  decks    Deck[]
+  votes    DeckVote[]
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuthToken {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  kind      TokenKind
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+}
+
+model ProfileClaim {
+  id           String      @id @default(cuid())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  player       Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  playerId     String
+  status       ClaimStatus @default(PENDING)
+  note         String?
+  createdAt    DateTime    @default(now())
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  @@unique([userId, playerId])
+}
+
+// ---------------------------------------------------------------------------
+// Cartas, banlist e decks (Fases 2–3 — schema já preparado)
+// ---------------------------------------------------------------------------
+
+/// Cache local das APIs de cartas (pokemontcg.io / Limitless).
+model Card {
+  id         String   @id // id externo, ex.: "sv4-123"
+  name       String
+  namePt     String?
+  supertype  String // Pokémon | Trainer | Energy
+  subtypes   String[]
+  types      String[] // tipos em inglês, alinhados ao enum PokemonType
+  setId      String
+  setName    String
+  number     String
+  rarity     String?
+  imageSmall String?
+  imageLarge String?
+  hasRuleBox Boolean  @default(false) // ex, V, GX, Radiant, ACE SPEC...
+  fetchedAt  DateTime @default(now())
+
+  deckCards DeckCard[]
+
+  @@index([name])
+}
+
+model BanlistEntry {
+  id        String   @id @default(cuid())
+  cardName  String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model Deck {
+  id          String      @id @default(cuid())
+  slug        String      @unique
+  title       String
+  type        PokemonType
+  guide       String? // markdown do autor
+  isPublic    Boolean     @default(false)
+  isChampion  Boolean     @default(false) // selo de deck vencedor
+  source      DeckSource  @default(BUILDER)
+  sourceUrl   String?
+  author      User?       @relation(fields: [authorUserId], references: [id])
+  authorUserId String?
+  player      Player?     @relation(fields: [playerId], references: [id])
+  playerId    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  versions    DeckVersion[]
+  resultLinks DeckResultLink[]
+  votes       DeckVote[]
+
+  @@index([type, isPublic])
+}
+
+model DeckVersion {
+  id        String   @id @default(cuid())
+  deck      Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deckId    String
+  version   Int
+  changelog String?
+  createdAt DateTime @default(now())
+  cards     DeckCard[]
+
+  @@unique([deckId, version])
+}
+
+model DeckCard {
+  id            String       @id @default(cuid())
+  deckVersion   DeckVersion  @relation(fields: [deckVersionId], references: [id], onDelete: Cascade)
+  deckVersionId String
+  card          Card?        @relation(fields: [cardId], references: [id])
+  cardId        String?
+  rawName       String // nome como veio da importação (resolução p/ Card pode ser posterior)
+  quantity      Int
+  category      CardCategory
+}
+
+/// "Este deck ganhou a insígnia de Lutador na Flow em DD/MM."
+model DeckResultLink {
+  id         String   @id @default(cuid())
+  deck       Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deckId     String
+  badgeWin   BadgeWin @relation(fields: [badgeWinId], references: [id], onDelete: Cascade)
+  badgeWinId String
+
+  @@unique([deckId, badgeWinId])
+}
+
+/// Links da aba Decklists: hoje são perfis de jogador no Cardboard Warriors
+/// (ex.: cardboardwarriors.net/decks/player/guipartezani), não decks individuais.
+model ExternalDeckRef {
+  id         String          @id @default(cuid())
+  url        String          @unique
+  kind       ExternalRefKind
+  source     DeckSource
+  player     Player?         @relation(fields: [playerId], references: [id])
+  playerId   String?
+  rawPlayer  String?
+  importedAt DateTime        @default(now())
+}
+
+/// Deck da semana (Fase 3): um voto por usuário por semana.
+model DeckVote {
+  id      String @id @default(cuid())
+  deck    Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deckId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String
+  weekKey String // "2026-W34"
+
+  @@unique([userId, weekKey])
+}

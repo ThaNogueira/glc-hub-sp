@@ -1,0 +1,402 @@
+/* GLC Hub SP — design tokens e base. Estilo: dados limpos (ref. Limitless),
+   camada temática sutil via cores dos 11 tipos e insígnias. */
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #eef0f3;
+  --text: #1c2430;
+  --muted: #5c6878;
+  --border: #dfe3e9;
+  --accent: #c73a2b; /* vermelho pokébola, discreto */
+  --accent-text: #ffffff;
+  --link: #1d5fa8;
+  --ok: #2e7d43;
+  --warn: #b26a00;
+  --bar-track: #e8eaee;
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116;
+    --surface: #161b23;
+    --surface-2: #1d232d;
+    --text: #e6eaf1;
+    --muted: #93a0b4;
+    --border: #262e3a;
+    --accent: #e05242;
+    --accent-text: #ffffff;
+    --link: #6ea8e8;
+    --ok: #58b374;
+    --warn: #e0a03c;
+    --bar-track: #232a35;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1116;
+  --surface: #161b23;
+  --surface-2: #1d232d;
+  --text: #e6eaf1;
+  --muted: #93a0b4;
+  --border: #262e3a;
+  --accent: #e05242;
+  --accent-text: #ffffff;
+  --link: #6ea8e8;
+  --ok: #58b374;
+  --warn: #e0a03c;
+  --bar-track: #232a35;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.25rem;
+}
+h2 {
+  font-size: 1.15rem;
+  margin: 1.75rem 0 0.5rem;
+}
+h1 + p.lead,
+h2 + p.lead {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* ---------- header / nav ---------- */
+
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.site-header .container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 3.25rem;
+  flex-wrap: wrap;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  color: var(--text);
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+.brand:hover {
+  text-decoration: none;
+}
+.main-nav {
+  display: flex;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.main-nav a {
+  color: var(--muted);
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.main-nav a:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+/* ---------- painéis, cards, stats ---------- */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+}
+.stat .stat-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.stat .stat-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ---------- tabelas de dados ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+table.data {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+table.data th,
+table.data td {
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+table.data tbody tr:last-child td {
+  border-bottom: none;
+}
+table.data th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--surface-2);
+}
+table.data tbody tr:hover {
+  background: var(--surface-2);
+}
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+td.dim {
+  color: var(--muted);
+  opacity: 0.45;
+}
+
+/* ---------- barras de share ---------- */
+
+.bar-track {
+  background: var(--bar-track);
+  border-radius: 4px;
+  height: 0.7rem;
+  min-width: 120px;
+  width: 100%;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* ---------- pills de tipo e chips ---------- */
+
+.type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.12rem 0.55rem 0.12rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.type-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.chip {
+  display: inline-block;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.chip.ok {
+  color: var(--ok);
+  border-color: currentColor;
+}
+.chip.warn {
+  color: var(--warn);
+  border-color: currentColor;
+}
+
+/* ---------- coleção de insígnias ---------- */
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.75rem;
+}
+.badge-cell {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.badge-cell .count {
+  font-weight: 700;
+  color: var(--text);
+}
+.badge-cell.unlit {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+/* ---------- agenda ---------- */
+
+.schedule-grid td.today,
+.schedule-grid th.today {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+.schedule-grid td.slot {
+  font-weight: 600;
+}
+
+/* ---------- formulários / filtros ---------- */
+
+.filter-bar {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: end;
+  margin: 1rem 0;
+}
+.filter-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+select,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="date"],
+textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.9rem;
+}
+button,
+.btn {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover,
+.btn:hover {
+  filter: brightness(1.08);
+}
+button.secondary,
+.btn.secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+button.small {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+}
+
+/* ---------- rodapé ---------- */
+
+.site-footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 1.25rem 0 2rem;
+}
+.site-footer p {
+  margin: 0.25rem 0;
+}
+
+/* ---------- utilidades ---------- */
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.8rem;
+}
+.mono {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.85em;
+}
+.mt0 {
+  margin-top: 0;
+}
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
