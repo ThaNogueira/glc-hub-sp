@@ -127,7 +127,7 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
         if (fSupertype) params.set("supertype", fSupertype);
         if (fSubtype) params.set("subtype", fSubtype);
         if (fSet) params.set("set", fSet);
-        params.set("limit", "48");
+        params.set("limit", "80");
         const res = await fetch(`/api/cards/search?${params}`);
         const data = (await res.json()) as { cards: GlcCard[] };
         if (seq === searchSeq.current) setResults(data.cards ?? []);
@@ -146,19 +146,38 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
       flashMsg(`"${displayName(card)}" está banida no GLC.`);
       return;
     }
-    setEntries((prev) => {
-      const idx = prev.findIndex((e) => e.card.name.toLowerCase() === card.name.toLowerCase());
-      if (idx >= 0) {
-        if (prev[idx].card.isBasicEnergy) {
-          const next = [...prev];
-          next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
-          return next;
-        }
+
+    // energia básica: mesma arte soma +1; arte nova vira entrada própria
+    if (card.isBasicEnergy) {
+      const sameArt = entries.some((e) => e.card.id === card.id);
+      setEntries((prev) =>
+        sameArt
+          ? prev.map((e) => (e.card.id === card.id ? { ...e, quantity: e.quantity + 1 } : e))
+          : [...prev, { card, quantity: 1 }],
+      );
+      return;
+    }
+
+    const existing = entries.find(
+      (e) => e.card.name.toLowerCase() === card.name.toLowerCase(),
+    );
+    if (existing) {
+      if (existing.card.id === card.id) {
         flashMsg(`Singleton: "${displayName(card)}" já está no deck.`);
-        return prev;
+        return;
       }
-      return [...prev, { card, quantity: 1 }];
-    });
+      // outra arte da mesma carta → troca a impressão, mantém posição/quantidade
+      if (coverCardId === existing.card.id) setCoverCardId(card.id);
+      setEntries((prev) =>
+        prev.map((e) => (e.card.id === existing.card.id ? { ...e, card } : e)),
+      );
+      flashMsg(
+        `Arte de "${displayName(card)}" trocada para ${card.setPtcgoCode ?? card.setName} ${card.number}.`,
+      );
+      return;
+    }
+
+    setEntries((prev) => [...prev, { card, quantity: 1 }]);
   }
 
   function setQty(cardId: string, qty: number) {
@@ -463,6 +482,9 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
                       ) : (
                         <span className="deck-view-fallback">{displayName(card)}</span>
                       )}
+                      <span className="set-tag">
+                        {card.setPtcgoCode ?? card.setName.slice(0, 6)} {card.number}
+                      </span>
                     </button>
                   ))}
               </div>

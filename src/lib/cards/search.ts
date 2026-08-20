@@ -4,8 +4,9 @@ import { fold } from "../normalize";
 
 /**
  * Busca local de cartas para o deck builder: prefixo (btree) + fuzzy
- * (pg_trgm), deduplicada por nome (no GLC a carta é o nome — a impressão
- * mais recente com imagem representa todas).
+ * (pg_trgm), em EN e PT. Retorna TODAS as impressões/artes de cada nome
+ * (prints da mesma carta ficam adjacentes, mais recentes primeiro) — o
+ * jogador escolhe a arte que vai pro deck.
  */
 
 export type CardHit = {
@@ -57,7 +58,7 @@ export type CardSearchParams = {
 
 export async function searchCards(params: CardSearchParams): Promise<CardHit[]> {
   const q = fold(params.q ?? "");
-  const limit = Math.min(Math.max(params.limit ?? 40, 1), 60);
+  const limit = Math.min(Math.max(params.limit ?? 80, 1), 160);
 
   // Só cartas jogáveis no GLC aparecem (pool BW+ contando reprints, sem Rule
   // Box / ACE SPEC). Banidas são glcLegal=true e entram COM flag — o jogador
@@ -93,13 +94,10 @@ export async function searchCards(params: CardSearchParams): Promise<CardHit[]> 
     SELECT id, name, "namePt", supertype, subtypes, types, hp, rules, attacks, "setId", "setName",
            "setPtcgoCode", number, rarity, "imageSmall", "imageLarge",
            "hasRuleBox", "isAceSpec", "isBasicEnergy", "glcLegal", "nameNormalized"
-    FROM (
-      SELECT DISTINCT ON ("nameNormalized") *
-      FROM "Card"
-      WHERE ${where}
-      ORDER BY "nameNormalized", "imageSmall" IS NULL, "setReleaseDate" DESC NULLS LAST
-    ) dedup
-    ORDER BY ${relevance} name ASC
+    FROM "Card"
+    WHERE ${where}
+    ORDER BY ${relevance} "nameNormalized" ASC,
+             "imageSmall" IS NULL, "setReleaseDate" DESC NULLS LAST, number ASC
     LIMIT ${limit}
   `);
 
