@@ -34,7 +34,9 @@ services:
       target: runner
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # só no localhost — quem expõe para a internet é o reverse proxy (Caddy).
+      # WEB_PORT permite desviar de conflitos com outros serviços da VPS.
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgresql://glchub:${POSTGRES_PASSWORD:-glchub}@db:5432/glchub?schema=public
     env_file: .env
