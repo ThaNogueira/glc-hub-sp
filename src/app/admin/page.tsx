@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/adminAuth";
 import { prisma } from "@/lib/db";
 import { getSetting, SETTING_DEFAULTS } from "@/lib/settings";
-import { logoutAction, syncNowAction, updateSettingsAction } from "./actions";
+import { importCardsAction, logoutAction, syncNowAction, updateSettingsAction } from "./actions";
 
 export const metadata = { title: "Admin", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -10,13 +10,17 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   await requireAdmin();
 
-  const [runs, openIssues, badgeCount, season, badgeRule] = await Promise.all([
-    prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 12 }),
-    prisma.reconciliationIssue.count({ where: { status: "OPEN" } }),
-    prisma.badgeWin.count({ where: { status: "ACTIVE" } }),
-    getSetting<string>("season2026Start"),
-    getSetting<string>("badgeRule"),
-  ]);
+  const [runs, openIssues, badgeCount, season, badgeRule, pendingClaims, pendingStores, cardCount] =
+    await Promise.all([
+      prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 12 }),
+      prisma.reconciliationIssue.count({ where: { status: "OPEN" } }),
+      prisma.badgeWin.count({ where: { status: "ACTIVE" } }),
+      getSetting<string>("season2026Start"),
+      getSetting<string>("badgeRule"),
+      prisma.profileClaim.count({ where: { status: "PENDING" } }),
+      prisma.storeRequest.count({ where: { status: "PENDING" } }),
+      prisma.card.count(),
+    ]);
 
   return (
     <>
@@ -38,21 +42,44 @@ export default async function AdminPage() {
             <Link href="/admin/issues">issues abertas</Link>
           </div>
         </div>
+        <div className="stat">
+          <div className="stat-value">{pendingClaims + pendingStores}</div>
+          <div className="stat-label">
+            <Link href="/admin/contas">contas pendentes</Link>
+          </div>
+        </div>
+        <div className="stat">
+          <div className="stat-value">{cardCount}</div>
+          <div className="stat-label">cartas na base</div>
+        </div>
       </div>
 
       <p>
         <Link href="/admin/issues">Divergências e conflitos</Link> ·{" "}
         <Link href="/admin/aliases">Jogadores, lojas e aliases</Link> ·{" "}
-        <Link href="/admin/tabs">Abas da planilha</Link>
+        <Link href="/admin/tabs">Abas da planilha</Link> ·{" "}
+        <Link href="/admin/contas">Contas e banlist</Link>
       </p>
 
       <h2>Sincronização</h2>
-      <form action={syncNowAction}>
-        <button type="submit">Sincronizar agora</button>{" "}
-        <span className="muted small">
-          (baixa a planilha, importa os logs e roda a reconciliação — pode levar ~1 min)
-        </span>
-      </form>
+      <div className="flex-row">
+        <form action={syncNowAction}>
+          <button type="submit">Sincronizar planilha</button>{" "}
+          <span className="muted small">
+            (baixa a planilha, importa os logs e roda a reconciliação — pode levar ~1 min)
+          </span>
+        </form>
+      </div>
+      <div className="flex-row" style={{ marginTop: "0.5rem" }}>
+        <form action={importCardsAction}>
+          <button type="submit" className="secondary">
+            Atualizar base de cartas
+          </button>{" "}
+          <span className="muted small">
+            (baixa o pokemon-tcg-data e importa novos sets — pode levar alguns minutos)
+          </span>
+        </form>
+      </div>
 
       <div className="table-wrap" style={{ marginTop: "1rem" }}>
         <table className="data">

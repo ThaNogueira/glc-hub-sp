@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/space-grotesk";
+import { Header } from "@/components/Header";
+import { TypeIcon } from "@/components/TypeIcon";
+import { getSessionUser } from "@/lib/auth";
 import { getDataFreshness } from "@/lib/queries";
+import { TYPES } from "@/lib/types";
 import "./globals.css";
 
 // Renderização dinâmica: o build da imagem Docker não tem banco disponível,
@@ -16,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s · GLC Hub SP",
   },
   description:
-    "Hub da comunidade de Pokémon TCG Gym Leader Challenge de São Paulo: meta, torneios, rankings e insígnias.",
+    "Hub da comunidade de Pokémon TCG Gym Leader Challenge de São Paulo: meta, torneios, rankings, insígnias e decks.",
   openGraph: {
     siteName: "GLC Hub SP",
     locale: "pt_BR",
@@ -24,14 +29,16 @@ export const metadata: Metadata = {
   },
 };
 
-const themeInit = `try{var t=localStorage.getItem("theme");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}`;
+// Dark é o padrão; "light" só quando o usuário escolheu explicitamente.
+const themeInit = `try{var t=localStorage.getItem("theme");if(t==="light")document.documentElement.dataset.theme="light"}catch(e){}`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let freshness: Awaited<ReturnType<typeof getDataFreshness>> | null = null;
+  let user: Awaited<ReturnType<typeof getSessionUser>> = null;
   try {
-    freshness = await getDataFreshness();
+    [freshness, user] = await Promise.all([getDataFreshness(), getSessionUser()]);
   } catch {
-    // banco indisponível (ex.: build sem DB) — o rodapé apenas omite a linha
+    // banco indisponível (ex.: build sem DB) — header/rodapé degradam sem quebrar
   }
 
   return (
@@ -40,35 +47,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
       <body>
-        <header className="site-header">
-          <div className="container">
-            <Link href="/" className="brand">
-              <svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true">
-                <path
-                  d="M32 3 L57 13 V33 C57 47 46 57 32 61 C18 57 7 47 7 33 V13 Z"
-                  fill="var(--accent)"
-                />
-                <circle cx="32" cy="31" r="10" fill="#fff" />
-                <circle cx="32" cy="31" r="5" fill="var(--accent)" />
-              </svg>
-              GLC Hub SP
-            </Link>
-            <nav className="main-nav">
-              <Link href="/">Meta</Link>
-              <Link href="/agenda">Agenda</Link>
-              <Link href="/rankings">Rankings</Link>
-              <Link href="/jogadores">Jogadores</Link>
-              <Link href="/lojas">Lojas</Link>
-              <Link href="/regras">Regras</Link>
-            </nav>
-            <ThemeToggle />
-          </div>
-        </header>
+        <Header
+          user={
+            user
+              ? { displayName: user.displayName, role: user.role, avatarUrl: user.avatarUrl }
+              : null
+          }
+        />
 
         <main className="container">{children}</main>
 
         <footer className="site-footer">
           <div className="container">
+            <div className="footer-types" aria-hidden="true">
+              {TYPES.map((t) => (
+                <TypeIcon key={t.id} type={t.id} size={16} />
+              ))}
+            </div>
+            <p>
+              <Link href="/regras">Regras do formato</Link> ·{" "}
+              <Link href="/creditos">Créditos</Link> · <Link href="/agenda">Agenda</Link> ·{" "}
+              <Link href="/decks">Decks</Link>
+            </p>
             {freshness?.lastSyncAt && (
               <p>
                 Dados sincronizados em{" "}
@@ -92,7 +92,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               >
                 GLC - Circuito SP
               </a>
-              , mantida pela comunidade.
+              , mantida pela comunidade. Ícones de tipo via{" "}
+              <a
+                href="https://archives.bulbagarden.net/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Bulbagarden Archives
+              </a>{" "}
+              · imagens de cartas via{" "}
+              <a href="https://pokemontcg.io/" target="_blank" rel="noopener noreferrer">
+                pokemontcg.io
+              </a>{" "}
+              — <Link href="/creditos">créditos completos</Link>.
             </p>
             <p>
               Projeto de fã, sem fins lucrativos. Não afiliado à The Pokémon Company, Nintendo,

@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { StoreCard } from "@/components/StoreCard";
+import { Reveal } from "@/components/Reveal";
 import { prisma } from "@/lib/db";
 
 export const metadata = {
@@ -23,59 +24,42 @@ export default async function StoresPage() {
       <h1>Lojas e eventos</h1>
       <p className="lead">O circuito GLC de São Paulo, loja a loja.</p>
 
-      <div className="table-wrap">
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Loja</th>
-              <th>Bairro</th>
-              <th>Status</th>
-              <th className="num">Insígnias entregues</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stores.map((v) => (
-              <tr key={v.id}>
-                <td>
-                  <Link href={`/lojas/${v.slug}`}>{v.name}</Link>
-                </td>
-                <td className="muted">{v.neighborhood ?? "—"}</td>
-                <td>
-                  {v.status === "ACTIVE" ? (
-                    <span className="chip ok">ativa</span>
-                  ) : (
-                    <span className="chip warn">em hiato</span>
-                  )}
-                </td>
-                <td className="num">{v._count.badges}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="store-grid">
+        {stores.map((v, i) => (
+          <Reveal key={v.id} delay={Math.min(i * 0.03, 0.3)}>
+            <StoreCard
+              store={{
+                slug: v.slug,
+                name: v.name,
+                neighborhood: v.neighborhood,
+                kind: v.kind,
+                status: v.status,
+                badgeCount: v._count.badges,
+                slots: v.slots.map((s) => ({ weekday: s.weekday, time: s.time })),
+              }}
+            />
+          </Reveal>
+        ))}
       </div>
 
       {events.length > 0 && (
         <>
           <h2>Eventos</h2>
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Evento</th>
-                  <th className="num">Insígnias entregues</th>
-                </tr>
-              </thead>
-              <tbody>
-                {events.map((v) => (
-                  <tr key={v.id}>
-                    <td>
-                      <Link href={`/lojas/${v.slug}`}>{v.name}</Link>
-                    </td>
-                    <td className="num">{v._count.badges}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="store-grid">
+            {events.map((v) => (
+              <StoreCard
+                key={v.id}
+                store={{
+                  slug: v.slug,
+                  name: v.name,
+                  neighborhood: v.neighborhood,
+                  kind: v.kind,
+                  status: v.status,
+                  badgeCount: v._count.badges,
+                  slots: [],
+                }}
+              />
+            ))}
           </div>
         </>
       )}

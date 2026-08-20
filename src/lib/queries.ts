@@ -53,6 +53,7 @@ export type MetaShareRow = {
   type: PokemonType;
   count: number;
   share: number; // 0..1
+  delta: number | null; // vitórias últimos 60 dias − 60 dias anteriores
   topPlayer: { name: string; slug: string; wins: number } | null;
 };
 
@@ -60,10 +61,24 @@ export async function getMetaShare(f: MetaFilters) {
   const where = await buildBadgeWhere(f);
   const badges = await prisma.badgeWin.findMany({
     where,
-    select: { type: true, playerId: true },
+    select: { type: true, playerId: true, date: true },
   });
   const total = badges.length;
   const players = new Set(badges.map((b) => b.playerId));
+
+  // variação: janela de 60 dias vs os 60 dias anteriores (só registros datados)
+  const now = Date.now();
+  const d60 = new Date(now - 60 * 86_400_000);
+  const d120 = new Date(now - 120 * 86_400_000);
+  const recentByType = new Map<PokemonType, number>();
+  const priorByType = new Map<PokemonType, number>();
+  let hasDated = false;
+  for (const b of badges) {
+    if (!b.date) continue;
+    hasDated = true;
+    if (b.date >= d60) recentByType.set(b.type, (recentByType.get(b.type) ?? 0) + 1);
+    else if (b.date >= d120) priorByType.set(b.type, (priorByType.get(b.type) ?? 0) + 1);
+  }
 
   const byType = new Map<PokemonType, Map<string, number>>();
   for (const b of badges) {
@@ -92,7 +107,15 @@ export async function getMetaShare(f: MetaFilters) {
         if (p) top = { name: p.name, slug: p.slug, wins };
       }
     }
-    return { type: t.id, count, share: total ? count / total : 0, topPlayer: top };
+    return {
+      type: t.id,
+      count,
+      share: total ? count / total : 0,
+      delta: hasDated
+        ? (recentByType.get(t.id) ?? 0) - (priorByType.get(t.id) ?? 0)
+        : null,
+      topPlayer: top,
+    };
   }).sort((a, b) => b.count - a.count);
 
   return { total, distinctPlayers: players.size, rows };
@@ -106,6 +129,7 @@ export type RankingRow = {
   player: { id: string; name: string; slug: string };
   wins: number;
   badges: number; // tipos distintos
+  signature: PokemonType | null; // tipo com mais vitórias do jogador
   perType: Partial<Record<PokemonType, number>>;
 };
 
@@ -138,6 +162,8 @@ export async function getRankings(
       player: playerById.get(playerId) ?? { id: playerId, name: "?", slug: "" },
       wins: a.wins,
       badges: a.perType.size,
+      signature:
+        [...a.perType.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null,
       perType: Object.fromEntries(a.perType) as Partial<Record<PokemonType, number>>,
     }))
     .sort((a, b) =>

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { EmptyState } from "@/components/EmptyState";
+import { Reveal } from "@/components/Reveal";
 import { prisma } from "@/lib/db";
 import { formatBrDate } from "@/lib/normalize";
 import { WEEKDAYS_PT } from "@/lib/types";
@@ -38,81 +40,104 @@ export default async function AgendaPage() {
 
   const today = todayWeekdayInSp();
 
+  // grade semanal → cards por dia (mobile-first)
+  const byDay = WEEKDAYS_PT.map((label, i) => {
+    const wd = i + 1;
+    const slots = activeStores
+      .flatMap((s) =>
+        s.slots
+          .filter((x) => x.weekday === wd)
+          .map((x) => ({ store: s, time: x.time })),
+      )
+      .sort((a, b) => (a.time ?? "zz").localeCompare(b.time ?? "zz"));
+    return { wd, label, slots };
+  });
+
   return (
     <>
       <h1>Agenda de torneios</h1>
       <p className="lead">Grade semanal do circuito — confirme horários no grupo da comunidade.</p>
 
-      <div className="table-wrap">
-        <table className="data schedule-grid">
-          <thead>
-            <tr>
-              <th>Dia</th>
-              {activeStores.map((s) => (
-                <th key={s.id}>
-                  <Link href={`/lojas/${s.slug}`}>{s.name}</Link>
-                  {s.neighborhood && (
-                    <div className="muted" style={{ textTransform: "none", fontWeight: 400 }}>
-                      {s.neighborhood}
-                    </div>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {WEEKDAYS_PT.map((day, i) => {
-              const wd = i + 1;
-              const isToday = wd === today;
-              return (
-                <tr key={day}>
-                  <td className={isToday ? "today" : ""}>
-                    <strong>{day}</strong>
-                    {isToday && <span className="chip ok" style={{ marginLeft: 6 }}>hoje</span>}
-                  </td>
-                  {activeStores.map((s) => {
-                    const slot = s.slots.find((x) => x.weekday === wd);
-                    return (
-                      <td key={s.id} className={`${isToday ? "today " : ""}${slot ? "slot" : ""}`}>
-                        {slot?.time ?? <span className="muted">—</span>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="agenda-week">
+        {byDay.map(({ wd, label, slots }) => (
+          <div key={wd} className={`agenda-day${wd === today ? " today" : ""}`}>
+            <h3>
+              {label}
+              {wd === today && <span className="chip accent">hoje</span>}
+            </h3>
+            {slots.length > 0 ? (
+              slots.map(({ store, time }) => (
+                <div key={store.id} className="agenda-slot">
+                  <span>
+                    <Link href={`/lojas/${store.slug}`}>{store.name}</Link>
+                    {store.neighborhood && (
+                      <span className="muted small"> · {store.neighborhood}</span>
+                    )}
+                  </span>
+                  <span className="time">{time ?? ""}</span>
+                </div>
+              ))
+            ) : (
+              <p className="muted small" style={{ margin: 0 }}>
+                sem torneios
+              </p>
+            )}
+          </div>
+        ))}
       </div>
 
       <h2>Torneios especiais</h2>
       {specials.length ? (
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Loja</th>
-                <th>Horário</th>
-                <th>Torneio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {specials.map((t) => (
-                <tr key={t.id}>
-                  <td>{formatBrDate(t.date)}</td>
-                  <td>
-                    <Link href={`/lojas/${t.venue.slug}`}>{t.venue.name}</Link>
-                  </td>
-                  <td>{t.time ?? "—"}</td>
-                  <td>{t.name ?? "—"}</td>
+        <Reveal>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Loja</th>
+                  <th>Horário</th>
+                  <th>Torneio</th>
+                  <th>Inscrição / premiação</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {specials.map((t) => (
+                  <tr key={t.id}>
+                    <td className="tnum">{formatBrDate(t.date)}</td>
+                    <td>
+                      <Link href={`/lojas/${t.venue.slug}`}>{t.venue.name}</Link>
+                    </td>
+                    <td>{t.time ?? "—"}</td>
+                    <td>
+                      {t.name ?? "—"}
+                      {t.origin === "SITE" && (
+                        <span className="chip ok" style={{ marginLeft: 6 }}>
+                          publicado pela loja
+                        </span>
+                      )}
+                    </td>
+                    <td className="small muted" style={{ whiteSpace: "normal", maxWidth: 260 }}>
+                      {[t.priceInfo, t.prizeInfo].filter(Boolean).join(" · ") || "—"}
+                      {t.registrationUrl && (
+                        <>
+                          {" · "}
+                          <a href={t.registrationUrl} target="_blank" rel="noopener noreferrer">
+                            inscrição
+                          </a>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Reveal>
       ) : (
-        <p className="muted">Nenhum torneio especial agendado no momento.</p>
+        <EmptyState
+          title="Nenhum torneio especial agendado"
+          hint="Quando as lojas publicarem torneios especiais, eles aparecem aqui junto com os da planilha."
+        />
       )}
 
       {hiatusStores.length > 0 && (

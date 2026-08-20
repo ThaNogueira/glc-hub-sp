@@ -14,23 +14,35 @@
     "sync": "tsx scripts/sync.ts",
     "sync:dry": "tsx scripts/dry-run.ts",
     "worker": "tsx scripts/worker.ts",
+    "cards:import": "tsx scripts/import-cards.ts",
+    "icons:prepare": "tsx scripts/prepare-type-icons.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
     "@prisma/client": "^6.5.0",
+    "bcryptjs": "^3.0.3",
+    "marked": "^18.0.10",
+    "motion": "^13.1.1",
     "next": "^15.2.3",
+    "nodemailer": "^9.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsx": "^4.19.3"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.13.10",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
+    "embedded-postgres": "^18.4.0-beta.17",
     "prisma": "^6.5.0",
+    "sharp": "^0.35.3",
     "typescript": "^5.8.2"
   }
 }

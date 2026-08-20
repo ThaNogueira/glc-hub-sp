@@ -132,6 +132,115 @@ export async function updateTabKindAction(formData: FormData) {
   revalidatePath("/admin/tabs");
 }
 
+// ---------------------------------------------------------------------------
+// Fase 2: contas (reivindicações de perfil e solicitações de loja) e banlist
+// ---------------------------------------------------------------------------
+
+export async function reviewClaimAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const approve = String(formData.get("decision")) === "approve";
+  const claim = await prisma.profileClaim.findUnique({
+    where: { id },
+    include: { player: { include: { user: { select: { id: true } } } } },
+  });
+  if (!claim || claim.status !== "PENDING") return;
+
+  if (approve) {
+    if (claim.player.user) return; // outro usuário levou o perfil antes
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: claim.userId }, data: { playerId: claim.playerId } }),
+      prisma.profileClaim.update({
+        where: { id },
+        data: { status: "APPROVED", reviewedAt: new Date() },
+      }),
+      // rejeita pedidos concorrentes pelo mesmo perfil
+      prisma.profileClaim.updateMany({
+        where: { playerId: claim.playerId, status: "PENDING", id: { not: id } },
+        data: { status: "REJECTED", reviewedAt: new Date() },
+      }),
+    ]);
+  } else {
+    await prisma.profileClaim.update({
+      where: { id },
+      data: { status: "REJECTED", reviewedAt: new Date() },
+    });
+  }
+  revalidatePath("/admin/contas");
+}
+
+export async function reviewStoreRequestAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const approve = String(formData.get("decision")) === "approve";
+  const req = await prisma.storeRequest.findUnique({ where: { id } });
+  if (!req || req.status !== "PENDING") return;
+
+  if (approve) {
+    const { fold: foldName, slugify } = await import("@/lib/normalize");
+    let venueId = req.venueId;
+    if (!venueId) {
+      // a loja ainda não existe no circuito — cria como STORE ativa
+      const venue = await prisma.venue.create({
+        data: {
+          name: req.venueName,
+          slug: slugify(req.venueName) || `loja-${Date.now()}`,
+          aliases: { create: { alias: req.venueName, normalized: foldName(req.venueName) } },
+        },
+      });
+      venueId = venue.id;
+    }
+    const taken = await prisma.user.findFirst({ where: { venueId } });
+    if (taken) return; // outra conta já administra essa loja
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: req.userId }, data: { role: "STORE", venueId } }),
+      prisma.storeRequest.update({
+        where: { id },
+        data: { status: "APPROVED", venueId, reviewedAt: new Date() },
+      }),
+    ]);
+  } else {
+    await prisma.storeRequest.update({
+      where: { id },
+      data: { status: "REJECTED", reviewedAt: new Date() },
+    });
+  }
+  revalidatePath("/admin/contas");
+}
+
+export async function addBanlistAction(formData: FormData) {
+  await guard();
+  const cardName = String(formData.get("cardName") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!cardName) return;
+  await prisma.banlistEntry.upsert({
+    where: { cardName },
+    create: { cardName, reason: reason || null },
+    update: { reason: reason || null },
+  });
+  const { invalidateBanlistCache } = await import("@/lib/cards/search");
+  invalidateBanlistCache();
+  revalidatePath("/admin/contas");
+}
+
+export async function removeBanlistAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.banlistEntry.delete({ where: { id } }).catch(() => {});
+  const { invalidateBanlistCache } = await import("@/lib/cards/search");
+  invalidateBanlistCache();
+  revalidatePath("/admin/contas");
+}
+
+export async function importCardsAction() {
+  await guard();
+  const { importCards } = await import("@/lib/cards/import");
+  await importCards((m) => console.log(`[admin cards] ${m}`));
+  revalidatePath("/admin");
+  redirect("/admin?cartas=ok");
+}
+
 export async function updateSettingsAction(formData: FormData) {
   await guard();
   const season = String(formData.get("season2026Start") ?? "").trim();

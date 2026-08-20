@@ -1,10 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getSessionUser } from "./auth";
 
 /**
- * Autenticação mínima do admin (Fase 1): ADMIN_PASSWORD + cookie HMAC com
- * expiração. Na Fase 2 isso é substituído por contas com role ADMIN.
+ * Autenticação do admin: contas com role ADMIN (Fase 2) ou, como fallback
+ * de emergência, o cookie HMAC da senha ADMIN_PASSWORD (Fase 1).
  */
 
 const COOKIE = "glc_admin";
@@ -14,7 +15,7 @@ function sign(value: string): string {
   return createHmac("sha256", process.env.AUTH_SECRET ?? "dev-secret").update(value).digest("hex");
 }
 
-export async function isAdmin(): Promise<boolean> {
+async function hasLegacyCookie(): Promise<boolean> {
   const raw = (await cookies()).get(COOKIE)?.value;
   if (!raw) return false;
   const [exp, sig] = raw.split(".");
@@ -23,6 +24,12 @@ export async function isAdmin(): Promise<boolean> {
   return (
     sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
   );
+}
+
+export async function isAdmin(): Promise<boolean> {
+  if (await hasLegacyCookie()) return true;
+  const user = await getSessionUser();
+  return user?.role === "ADMIN";
 }
 
 export async function requireAdmin() {

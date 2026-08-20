@@ -1,19 +1,30 @@
 "use client";
 
+/** Dark é o padrão do site; o toggle alterna para light e persiste a escolha. */
 export function ThemeToggle() {
   function toggle() {
     const root = document.documentElement;
-    const isDark =
-      root.dataset.theme === "dark" ||
-      (!root.dataset.theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    const next = isDark ? "light" : "dark";
-    root.dataset.theme = next;
-    try {
-      localStorage.setItem("theme", next);
-    } catch {}
+    const isLight = root.dataset.theme === "light";
+    if (isLight) {
+      delete root.dataset.theme; // volta ao padrão (dark)
+      try {
+        localStorage.setItem("theme", "dark");
+      } catch {}
+    } else {
+      root.dataset.theme = "light";
+      try {
+        localStorage.setItem("theme", "light");
+      } catch {}
+    }
   }
   return (
-    <button type="button" className="secondary small" onClick={toggle} aria-label="Alternar tema">
+    <button
+      type="button"
+      className="ghost small"
+      onClick={toggle}
+      aria-label="Alternar tema claro/escuro"
+      title="Alternar tema"
+    >
       ☀︎/☾
     </button>
   );

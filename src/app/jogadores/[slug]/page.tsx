@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BadgeShield } from "@/components/BadgeShield";
-import { TypePill } from "@/components/TypePill";
+import { InsigniaShowcase, type InsigniaInfo } from "@/components/InsigniaShowcase";
+import { TypeBadge } from "@/components/TypeBadge";
+import { DeckCard } from "@/components/DeckCard";
 import { prisma } from "@/lib/db";
 import { formatBrDate } from "@/lib/normalize";
-import { TYPES, TYPE_BY_ID } from "@/lib/types";
+import { TYPE_BY_ID } from "@/lib/types";
 
 async function getPlayer(slug: string) {
   return prisma.player.findUnique({
@@ -13,10 +14,17 @@ async function getPlayer(slug: string) {
     include: {
       badges: {
         where: { status: "ACTIVE" },
-        include: { venue: true },
+        include: { venue: true, deckLinks: { include: { deck: true } } },
         orderBy: [{ date: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       },
       externalRefs: true,
+      user: { select: { displayName: true, avatarUrl: true, favoriteType: true } },
+      decks: {
+        where: { isPublic: true },
+        include: { coverCard: true, author: { select: { displayName: true } } },
+        orderBy: { updatedAt: "desc" },
+        take: 6,
+      },
     },
   });
 }
@@ -45,33 +53,73 @@ export default async function PlayerPage({ params }: { params: Promise<{ slug: s
   const player = await getPlayer(slug);
   if (!player) notFound();
 
-  const perType = new Map<string, number>();
-  for (const b of player.badges) perType.set(b.type, (perType.get(b.type) ?? 0) + 1);
+  // agregados por tipo + primeira conquista (para o tooltip das insígnias)
+  const perType = new Map<string, { count: number; firstDate: Date | null; firstVenue: string | null }>();
+  for (const b of [...player.badges].reverse()) {
+    const cur = perType.get(b.type);
+    if (!cur) {
+      perType.set(b.type, { count: 1, firstDate: b.date, firstVenue: b.venue.name });
+    } else {
+      cur.count++;
+    }
+  }
   const distinct = perType.size;
 
   const signature =
-    [...perType.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] as
+    ([...perType.entries()].sort((a, b) => b[1].count - a[1].count)[0]?.[0] as
       | keyof typeof TYPE_BY_ID
-      | undefined;
+      | undefined) ?? null;
+  const accentType = player.user?.favoriteType ?? signature;
 
   const presencial = player.badges.filter((b) => b.modality === "PRESENCIAL").length;
   const online = player.badges.length - presencial;
 
+  const insignias: InsigniaInfo[] = [...perType.entries()].map(([type, v]) => ({
+    type: type as InsigniaInfo["type"],
+    count: v.count,
+    firstDate: v.firstDate ? formatBrDate(v.firstDate) : null,
+    firstVenue: v.firstVenue,
+  }));
+
   return (
     <>
-      <div className="panel">
+      <div
+        className="player-hero"
+        style={
+          accentType
+            ? { ["--hero-color" as string]: `var(${TYPE_BY_ID[accentType].cssVar})` }
+            : undefined
+        }
+      >
         <div className="flex-between">
-          <div>
-            <h1 className="mt0">{player.name}</h1>
-            {signature && (
-              <p className="lead">
-                Tipo signature: <TypePill type={signature} />
-              </p>
+          <div className="flex-row" style={{ gap: "0.9rem" }}>
+            {player.user?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={player.user.avatarUrl} alt="" className="avatar" />
+            ) : (
+              <span className="avatar placeholder" aria-hidden="true">
+                {player.name.charAt(0).toUpperCase()}
+              </span>
             )}
+            <div>
+              <h1>{player.name}</h1>
+              <div className="flex-row" style={{ marginTop: "0.35rem" }}>
+                {signature && (
+                  <span className="small muted">
+                    Tipo signature: <TypeBadge type={signature} />
+                  </span>
+                )}
+                {player.user && (
+                  <span className="chip accent" title="Perfil reivindicado pelo jogador">
+                    ✓ perfil reivindicado
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
           {distinct === 11 && <span className="chip ok">Coleção completa — 11 insígnias!</span>}
         </div>
-        <div className="stat-row">
+        <div className="stat-row" style={{ marginBottom: 0 }}>
           <div className="stat">
             <div className="stat-value">{player.badges.length}</div>
             <div className="stat-label">vitórias</div>
@@ -93,23 +141,35 @@ export default async function PlayerPage({ params }: { params: Promise<{ slug: s
 
       <h2>Jornada de ginásios</h2>
       <div className="panel">
-        <div className="badge-grid">
-          {TYPES.map((t) => {
-            const count = perType.get(t.id) ?? 0;
-            return (
-              <div key={t.id} className={`badge-cell${count === 0 ? " unlit" : ""}`}>
-                <BadgeShield type={t.id} />
-                <div>{t.pt}</div>
-                <div className="count">{count > 0 ? `×${count}` : "—"}</div>
-              </div>
-            );
-          })}
-        </div>
+        <InsigniaShowcase items={insignias} />
       </div>
+
+      {player.decks.length > 0 && (
+        <>
+          <h2>Decks publicados</h2>
+          <div className="deck-gallery">
+            {player.decks.map((d) => (
+              <DeckCard
+                key={d.id}
+                deck={{
+                  slug: d.slug,
+                  title: d.title,
+                  type: d.type,
+                  isChampion: d.isChampion,
+                  coverImage: d.coverCard?.imageSmall ?? null,
+                  authorName: player.name,
+                  updatedAt: d.updatedAt.toISOString(),
+                  views: d.views,
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {player.externalRefs.length > 0 && (
         <>
-          <h2>Decklists publicadas</h2>
+          <h2>Decklists externas</h2>
           <ul>
             {player.externalRefs.map((ref) => (
               <li key={ref.id}>
@@ -132,19 +192,33 @@ export default async function PlayerPage({ params }: { params: Promise<{ slug: s
               <th>Loja / evento</th>
               <th>Tipo</th>
               <th>Modalidade</th>
+              <th>Deck</th>
             </tr>
           </thead>
           <tbody>
             {player.badges.map((b) => (
               <tr key={b.id}>
-                <td>{b.date ? formatBrDate(b.date) : <span className="muted">sem data</span>}</td>
+                <td className="tnum">
+                  {b.date ? formatBrDate(b.date) : <span className="muted">sem data</span>}
+                </td>
                 <td>
                   <Link href={`/lojas/${b.venue.slug}`}>{b.venue.name}</Link>
                 </td>
                 <td>
-                  <TypePill type={b.type} />
+                  <TypeBadge type={b.type} />
                 </td>
                 <td className="muted">{b.modality === "ONLINE" ? "Online" : "Presencial"}</td>
+                <td>
+                  {b.deckLinks.length > 0 ? (
+                    b.deckLinks.map((l) => (
+                      <Link key={l.id} href={`/decks/${l.deck.slug}`}>
+                        {l.deck.title}
+                      </Link>
+                    ))
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

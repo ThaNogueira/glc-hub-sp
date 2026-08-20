@@ -170,11 +170,12 @@ model Venue {
   status       VenueStatus @default(ACTIVE)
   createdAt    DateTime    @default(now())
 
-  aliases     VenueAlias[]
-  slots       WeeklySlot[]
-  tournaments Tournament[]
-  badges      BadgeWin[]
-  user        User?
+  aliases       VenueAlias[]
+  slots         WeeklySlot[]
+  tournaments   Tournament[]
+  badges        BadgeWin[]
+  user          User?
+  storeRequests StoreRequest[]
 }
 
 model VenueAlias {
@@ -208,6 +209,11 @@ model Tournament {
   date            DateTime     @db.Date
   time            String?
   name            String?
+  // Fase 2 — publicados por contas de loja
+  priceInfo       String? // "R$ 20 (vale loja)"
+  prizeInfo       String? // premiação
+  registrationUrl String?
+  description     String?
   origin          RecordOrigin @default(SHEET)
   createdByUserId String?
   createdAt       DateTime     @default(now())
@@ -324,6 +330,8 @@ model User {
   displayName     String
   role            Role      @default(PLAYER)
   emailVerifiedAt DateTime?
+  avatarUrl       String?
+  favoriteType    PokemonType? // acento de cor do perfil
   createdAt       DateTime  @default(now())
 
   // perfil de jogador reivindicado (aprovação do admin)
@@ -334,11 +342,12 @@ model User {
   venue   Venue?  @relation(fields: [venueId], references: [id])
   venueId String? @unique
 
-  sessions AuthSession[]
-  tokens   AuthToken[]
-  claims   ProfileClaim[]
-  decks    Deck[]
-  votes    DeckVote[]
+  sessions      AuthSession[]
+  tokens        AuthToken[]
+  claims        ProfileClaim[]
+  decks         Deck[]
+  votes         DeckVote[]
+  storeRequests StoreRequest[]
 }
 
 model AuthSession {
@@ -362,6 +371,24 @@ model AuthToken {
   usedAt    DateTime?
 }
 
+/// Solicitação de conta de loja: o usuário pede o vínculo com uma Venue
+/// (existente ou nova) e o admin aprova, promovendo a role para STORE.
+model StoreRequest {
+  id           String      @id @default(cuid())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  venue        Venue?      @relation(fields: [venueId], references: [id])
+  venueId      String?
+  venueName    String // como o usuário escreveu (a loja pode não existir ainda)
+  message      String?
+  status       ClaimStatus @default(PENDING)
+  createdAt    DateTime    @default(now())
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  @@index([status])
+}
+
 model ProfileClaim {
   id           String      @id @default(cuid())
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -381,26 +408,47 @@ model ProfileClaim {
 // Cartas, banlist e decks (Fases 2–3 — schema já preparado)
 // ---------------------------------------------------------------------------
 
-/// Cache local das APIs de cartas (pokemontcg.io / Limitless).
+/// Base local de cartas importada do repositório PokemonTCG/pokemon-tcg-data
+/// (mesmo dataset da pokemontcg.io). Imagens sempre via images.pokemontcg.io.
 model Card {
-  id         String   @id // id externo, ex.: "sv4-123"
-  name       String
-  namePt     String?
-  supertype  String // Pokémon | Trainer | Energy
-  subtypes   String[]
-  types      String[] // tipos em inglês, alinhados ao enum PokemonType
-  setId      String
-  setName    String
-  number     String
-  rarity     String?
-  imageSmall String?
-  imageLarge String?
-  hasRuleBox Boolean  @default(false) // ex, V, GX, Radiant, ACE SPEC...
-  fetchedAt  DateTime @default(now())
+  id             String   @id // id externo, ex.: "sv4-123"
+  name           String
+  nameNormalized String // fold(name) — chave de busca (prefixo + trigram)
+  namePt         String?
+  supertype      String // Pokémon | Trainer | Energy
+  subtypes       String[]
+  types          String[] // tipos em inglês, alinhados ao enum PokemonType
+  hp             Int?
+  rules          String[] // texto de Rule Box / regras da carta
+  attacks        Json? // [{name, cost, convertedEnergyCost, damage, text}] — curva do builder
+  evolvesFrom    String?
+  regulationMark String?
+  legalities     Json? // { standard, expanded, unlimited } do dataset
+  setId          String
+  setName        String
+  setSeries      String?
+  setPtcgoCode   String? // código TCG Live/Limitless ("SVI", "PAF"...) p/ importar listas
+  setReleaseDate String?
+  number         String
+  rarity         String?
+  imageSmall     String?
+  imageLarge     String?
+
+  // Flags GLC pré-computadas no import (banlist é dinâmica, ver BanlistEntry)
+  hasRuleBox    Boolean @default(false) // ex, V, VMAX, VSTAR, GX, EX, Radiant, Prism Star...
+  isAceSpec     Boolean @default(false)
+  isBasicEnergy Boolean @default(false)
+  glcLegal      Boolean @default(true) // legalidade base (sem contar banlist editável)
+
+  fetchedAt DateTime @default(now())
 
   deckCards DeckCard[]
+  coverOf   Deck[]     @relation("DeckCover")
 
   @@index([name])
+  @@index([nameNormalized])
+  @@index([supertype])
+  @@index([setId])
 }
 
 model BanlistEntry {
@@ -420,6 +468,9 @@ model Deck {
   isChampion  Boolean     @default(false) // selo de deck vencedor
   source      DeckSource  @default(BUILDER)
   sourceUrl   String?
+  views       Int         @default(0)
+  coverCard   Card?       @relation("DeckCover", fields: [coverCardId], references: [id])
+  coverCardId String?
   author      User?       @relation(fields: [authorUserId], references: [id])
   authorUserId String?
   player      Player?     @relation(fields: [playerId], references: [id])

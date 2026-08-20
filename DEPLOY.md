@@ -27,6 +27,9 @@ Edite `.env`:
 | `POSTGRES_PASSWORD` | senha forte do banco (usada pelo compose) |
 | `SITE_URL` | `https://glchub.seudominio.com` |
 | `SYNC_INTERVAL_MINUTES` | `120` (1h–6h) |
+| `CARDS_REFRESH_HOURS` | `168` (refresh semanal da base de cartas) |
+| `SMTP_URL` | SMTP p/ e-mails de verificação/reset (vazio = links no log) |
+| `MAIL_FROM` | remetente dos e-mails transacionais |
 | `SHEET_ID` | já aponta para a planilha do circuito |
 
 `DATABASE_URL` **não** precisa ser definida no `.env` para o compose — os
@@ -37,7 +40,8 @@ do `.env.example` serve para dev local fora do Docker.
 
 ```bash
 docker compose up -d --build
-docker compose run --rm worker npx tsx scripts/sync.ts   # primeira importação
+docker compose run --rm worker npx tsx scripts/sync.ts          # primeira importação
+docker compose run --rm worker npx tsx scripts/import-cards.ts  # base de cartas (deck builder)
 docker compose logs -f web worker
 ```
 
