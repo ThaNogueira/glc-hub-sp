@@ -19,7 +19,7 @@ export default async function EditDeckPage({ params }: { params: Promise<{ slug:
       versions: {
         orderBy: { version: "desc" },
         take: 1,
-        include: { cards: { include: { card: true } } },
+        include: { cards: { include: { card: true }, orderBy: { position: "asc" } } },
       },
     },
   });

@@ -411,10 +411,11 @@ model ProfileClaim {
 /// Base local de cartas importada do repositório PokemonTCG/pokemon-tcg-data
 /// (mesmo dataset da pokemontcg.io). Imagens sempre via images.pokemontcg.io.
 model Card {
-  id             String   @id // id externo, ex.: "sv4-123"
-  name           String
-  nameNormalized String // fold(name) — chave de busca (prefixo + trigram)
-  namePt         String?
+  id               String   @id // id externo, ex.: "sv4-123"
+  name             String
+  nameNormalized   String // fold(name) — chave de busca (prefixo + trigram)
+  namePt           String? // nome PT-BR (via TCGdex, match por id)
+  namePtNormalized String? // fold(namePt) — busca funciona nas duas línguas
   supertype      String // Pokémon | Trainer | Energy
   subtypes       String[]
   types          String[] // tipos em inglês, alinhados ao enum PokemonType
@@ -447,6 +448,7 @@ model Card {
 
   @@index([name])
   @@index([nameNormalized])
+  @@index([namePtNormalized])
   @@index([supertype])
   @@index([setId])
 }
@@ -506,6 +508,7 @@ model DeckCard {
   rawName       String // nome como veio da importação (resolução p/ Card pode ser posterior)
   quantity      Int
   category      CardCategory
+  position      Int          @default(0) // ordem manual definida no builder
 }
 
 /// "Este deck ganhou a insígnia de Lutador na Flow em DD/MM."

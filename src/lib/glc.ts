@@ -9,6 +9,7 @@ import { TYPES } from "./types";
 export type GlcCard = {
   id: string;
   name: string;
+  namePt: string | null;
   supertype: string; // Pokémon | Trainer | Energy
   subtypes: string[];
   types: string[]; // tipos em inglês do dataset ("Fire", ...)

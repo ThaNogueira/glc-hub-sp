@@ -22,7 +22,7 @@ async function getDeck(slug: string) {
       player: { select: { name: true, slug: true } },
       versions: {
         orderBy: { version: "desc" },
-        include: { cards: { include: { card: true } } },
+        include: { cards: { include: { card: true }, orderBy: { position: "asc" } } },
       },
       resultLinks: { include: { badgeWin: { include: { venue: true } } } },
     },
@@ -154,9 +154,8 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
       </div>
 
       {(["POKEMON", "TRAINER", "ENERGY"] as const).map((cat) => {
-        const items = version.cards
-          .filter((dc) => dc.category === cat)
-          .sort((a, b) => a.rawName.localeCompare(b.rawName));
+        // mantém a ordem manual definida no builder (position)
+        const items = version.cards.filter((dc) => dc.category === cat);
         if (items.length === 0) return null;
         return (
           <section key={cat}>

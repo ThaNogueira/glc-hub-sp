@@ -31,8 +31,39 @@ export type BuilderInitial = {
 
 type SetOption = { id: string; name: string };
 
-const CATEGORY_LABEL = { POKEMON: "Pokémon", TRAINER: "Treinadores", ENERGY: "Energias" } as const;
 const SUBTYPE_OPTIONS = ["Item", "Supporter", "Pokémon Tool", "Stadium", "Basic", "Stage 1", "Stage 2"];
+
+/** Grupos detalhados do deck (estilo Limitless): Pokémon · Itens · Apoiadores... */
+const GROUPS = [
+  { key: "pokemon", label: "Pokémon" },
+  { key: "item", label: "Itens" },
+  { key: "supporter", label: "Apoiadores" },
+  { key: "tool", label: "Ferramentas" },
+  { key: "stadium", label: "Estádios" },
+  { key: "energy", label: "Energias" },
+] as const;
+type GroupKey = (typeof GROUPS)[number]["key"];
+
+function groupOf(card: GlcCard): GroupKey {
+  const cat = categoryOf(card);
+  if (cat === "POKEMON") return "pokemon";
+  if (cat === "ENERGY") return "energy";
+  if (card.subtypes.includes("Supporter")) return "supporter";
+  if (card.subtypes.includes("Pokémon Tool")) return "tool";
+  if (card.subtypes.includes("Stadium")) return "stadium";
+  return "item";
+}
+
+function displayName(card: GlcCard): string {
+  return card.namePt ?? card.name;
+}
+
+function minAttackCost(card: GlcCard): number {
+  const costs = (card.attacks ?? [])
+    .map((a) => a.convertedEnergyCost ?? (a.cost?.length ?? 0))
+    .filter((c) => Number.isFinite(c));
+  return costs.length ? Math.min(...costs) : 99;
+}
 
 export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: SetOption[] }) {
   const reduced = useReducedMotion();
@@ -57,6 +88,9 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
   const [searching, setSearching] = useState(false);
   const [zoom, setZoom] = useState<{ card: GlcCard; x: number; y: number } | null>(null);
   const searchSeq = useRef(0);
+
+  // drag & drop (reordenação manual)
+  const dragId = useRef<string | null>(null);
 
   // import/export
   const [showImport, setShowImport] = useState(false);
@@ -93,7 +127,7 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
         if (fSupertype) params.set("supertype", fSupertype);
         if (fSubtype) params.set("subtype", fSubtype);
         if (fSet) params.set("set", fSet);
-        params.set("limit", "42");
+        params.set("limit", "48");
         const res = await fetch(`/api/cards/search?${params}`);
         const data = (await res.json()) as { cards: GlcCard[] };
         if (seq === searchSeq.current) setResults(data.cards ?? []);
@@ -107,33 +141,20 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
   }, [q, fType, fSupertype, fSubtype, fSet]);
 
   // ---------------------------------------------------------------- deck ops
-  const isIllegal = (card: GlcCard) =>
-    card.banned || card.hasRuleBox || card.isAceSpec || !card.glcLegal;
-
-  function illegalReason(card: GlcCard): string {
-    if (card.banned) return "banida no GLC";
-    if (card.hasRuleBox) return "Rule Box";
-    if (card.isAceSpec) return "ACE SPEC";
-    if (!card.glcLegal) return "fora do pool BW+";
-    return "";
-  }
-
   function addCard(card: GlcCard) {
-    if (isIllegal(card)) {
-      flashMsg(`"${card.name}" é proibida no GLC (${illegalReason(card)}).`);
+    if (card.banned) {
+      flashMsg(`"${displayName(card)}" está banida no GLC.`);
       return;
     }
     setEntries((prev) => {
-      const idx = prev.findIndex(
-        (e) => e.card.name.toLowerCase() === card.name.toLowerCase(),
-      );
+      const idx = prev.findIndex((e) => e.card.name.toLowerCase() === card.name.toLowerCase());
       if (idx >= 0) {
         if (prev[idx].card.isBasicEnergy) {
           const next = [...prev];
           next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
           return next;
         }
-        flashMsg(`Singleton: "${card.name}" já está no deck.`);
+        flashMsg(`Singleton: "${displayName(card)}" já está no deck.`);
         return prev;
       }
       return [...prev, { card, quantity: 1 }];
@@ -147,6 +168,36 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
         : prev.map((e) => (e.card.id === cardId ? { ...e, quantity: Math.min(qty, 60) } : e)),
     );
     if (coverCardId === cardId && qty <= 0) setCoverCardId(null);
+  }
+
+  /** Move a carta arrastada para a posição da carta alvo (mesmo grupo). */
+  function moveCard(fromId: string, toId: string) {
+    if (fromId === toId) return;
+    setEntries((prev) => {
+      const fromIdx = prev.findIndex((e) => e.card.id === fromId);
+      const toIdx = prev.findIndex((e) => e.card.id === toId);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      if (groupOf(prev[fromIdx].card) !== groupOf(prev[toIdx].card)) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+  }
+
+  function sortEntries(mode: "az" | "cost") {
+    const groupIndex = (e: DeckEntry) => GROUPS.findIndex((g) => g.key === groupOf(e.card));
+    setEntries((prev) =>
+      [...prev].sort((a, b) => {
+        const g = groupIndex(a) - groupIndex(b);
+        if (g !== 0) return g;
+        if (mode === "cost" && groupOf(a.card) === "pokemon") {
+          const c = minAttackCost(a.card) - minAttackCost(b.card);
+          if (c !== 0) return c;
+        }
+        return displayName(a.card).localeCompare(displayName(b.card));
+      }),
+    );
   }
 
   // ---------------------------------------------------------------- import/export
@@ -218,11 +269,9 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
   }
 
   // ---------------------------------------------------------------- render
-  const groups = (["POKEMON", "TRAINER", "ENERGY"] as const).map((cat) => ({
-    cat,
-    items: entries
-      .filter((e) => categoryOf(e.card) === cat)
-      .sort((a, b) => a.card.name.localeCompare(b.card.name)),
+  const grouped = GROUPS.map((g) => ({
+    ...g,
+    items: entries.filter((e) => groupOf(e.card) === g.key), // preserva ordem manual
   }));
 
   const problemNames = new Set(
@@ -232,6 +281,11 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
   const R = 26;
   const CIRC = 2 * Math.PI * R;
   const ringColor = count === 60 ? "var(--ok)" : count > 60 ? "var(--err)" : "var(--accent)";
+
+  const showZoom = (card: GlcCard, ev: React.MouseEvent) =>
+    setZoom({ card, x: ev.clientX, y: ev.clientY });
+  const trackZoom = (ev: React.MouseEvent) =>
+    setZoom((z) => (z ? { ...z, x: ev.clientX, y: ev.clientY } : z));
 
   return (
     <div>
@@ -310,21 +364,14 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
               Publicar
             </button>
           </div>
-          {!validation.ok && (
-            <span className="small muted">publicação exige deck 60/60 válido</span>
-          )}
+          {!validation.ok && <span className="small muted">publicação exige deck 60/60 válido</span>}
           {saveError && <span className="form-msg err">{saveError}</span>}
         </div>
       </div>
 
       {/* abas mobile */}
       <div className="builder-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "search"}
-          onClick={() => setTab("search")}
-        >
+        <button type="button" role="tab" aria-selected={tab === "search"} onClick={() => setTab("search")}>
           Buscar cartas
         </button>
         <button type="button" role="tab" aria-selected={tab === "deck"} onClick={() => setTab("deck")}>
@@ -340,7 +387,7 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar carta… (ex.: pidgeot, rare candy)"
+              placeholder="Buscar carta em PT ou EN… (ex.: doce raro, rare candy)"
               style={{ width: "100%" }}
               aria-label="Buscar carta"
               autoFocus
@@ -381,7 +428,7 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
             <div style={{ marginTop: "0.75rem", minHeight: 120 }}>
               {searching && (
                 <div className="card-results" aria-hidden="true">
-                  {Array.from({ length: 8 }).map((_, i) => (
+                  {Array.from({ length: 10 }).map((_, i) => (
                     <div key={i} className="skeleton" style={{ aspectRatio: "63/88" }} />
                   ))}
                 </div>
@@ -391,43 +438,33 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
               )}
               {!searching && results.length === 0 && q.trim().length < 2 && !fType && !fSupertype && !fSubtype && !fSet && (
                 <p className="muted small">
-                  Digite pelo menos 2 letras ou use os filtros. A busca roda na base local
-                  (pokemon-tcg-data) e cada nome aparece uma vez — no GLC a carta é o nome.
+                  Digite pelo menos 2 letras (português ou inglês) ou use os filtros. Só aparecem
+                  cartas jogáveis no GLC — banidas vêm marcadas.
                 </p>
               )}
               <div className="card-results">
                 {!searching &&
-                  results.map((card) => {
-                    const illegal = isIllegal(card);
-                    return (
-                      <button
-                        key={card.id}
-                        type="button"
-                        className={`card-thumb${illegal ? " illegal" : ""}`}
-                        onClick={() => addCard(card)}
-                        onMouseEnter={(ev) =>
-                          setZoom({ card, x: ev.clientX, y: ev.clientY })
-                        }
-                        onMouseMove={(ev) => setZoom((z) => (z ? { ...z, x: ev.clientX, y: ev.clientY } : z))}
-                        onMouseLeave={() => setZoom(null)}
-                        title={`${card.name} · ${card.setName}${illegal ? ` — ${illegalReason(card)}` : ""}`}
-                        aria-label={`Adicionar ${card.name}`}
-                      >
-                        {illegal && <span className="flag">{illegalReason(card)}</span>}
-                        {card.imageSmall ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={card.imageSmall} alt={card.name} loading="lazy" decoding="async" />
-                        ) : (
-                          <span
-                            className="skeleton"
-                            style={{ aspectRatio: "63/88", display: "block", animation: "none" }}
-                          >
-                            <span className="small" style={{ padding: 4, display: "block" }}>{card.name}</span>
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                  results.map((card) => (
+                    <button
+                      key={card.id}
+                      type="button"
+                      className={`card-thumb${card.banned ? " illegal" : ""}`}
+                      onClick={() => addCard(card)}
+                      onMouseEnter={(ev) => showZoom(card, ev)}
+                      onMouseMove={trackZoom}
+                      onMouseLeave={() => setZoom(null)}
+                      title={`${displayName(card)}${card.namePt ? ` (${card.name})` : ""} · ${card.setName}${card.banned ? " — BANIDA" : ""}`}
+                      aria-label={`Adicionar ${displayName(card)}`}
+                    >
+                      {card.banned && <span className="flag">BANIDA</span>}
+                      {card.imageSmall ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={card.imageSmall} alt={displayName(card)} loading="lazy" decoding="async" />
+                      ) : (
+                        <span className="deck-view-fallback">{displayName(card)}</span>
+                      )}
+                    </button>
+                  ))}
               </div>
             </div>
           </div>
@@ -510,15 +547,36 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
             </div>
           </div>
 
-          {/* import / export */}
+          {/* ferramentas: ordenar, importar, exportar */}
           <div className="flex-row" style={{ margin: "0.75rem 0" }}>
-            <button type="button" className="secondary small" onClick={() => { setShowImport((v) => !v); setShowExport(false); }}>
-              Importar lista
+            <span className="small muted">Ordenar:</span>
+            <button type="button" className="secondary small" onClick={() => sortEntries("az")}>
+              A–Z
+            </button>
+            <button type="button" className="secondary small" onClick={() => sortEntries("cost")}>
+              Custo
+            </button>
+            <span className="small muted hide-sm" title="Arraste as cartas para reordenar dentro do grupo">
+              ↔ arraste p/ reordenar
+            </span>
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              className="secondary small"
+              onClick={() => {
+                setShowImport((v) => !v);
+                setShowExport(false);
+              }}
+            >
+              Importar
             </button>
             <button
               type="button"
               className="secondary small"
-              onClick={() => { setShowExport((v) => !v); setShowImport(false); }}
+              onClick={() => {
+                setShowExport((v) => !v);
+                setShowImport(false);
+              }}
               disabled={entries.length === 0}
             >
               Exportar
@@ -528,7 +586,7 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
           {showImport && (
             <div className="panel" style={{ marginTop: 0 }}>
               <label className="field">
-                Cole a lista (formato TCG Live / Limitless)
+                Cole a lista (formato TCG Live / Limitless — nomes em PT ou EN)
                 <textarea
                   rows={6}
                   value={importText}
@@ -579,75 +637,102 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
             </div>
           )}
 
-          {/* lista do deck */}
+          {/* grid visual do deck (estilo Limitless) */}
           {entries.length === 0 ? (
             <p className="muted small">
               O deck está vazio — busque cartas ao lado (ou acima, no celular) e clique para
               adicionar.
             </p>
           ) : (
-            groups.map(
+            grouped.map(
               (g) =>
                 g.items.length > 0 && (
-                  <div key={g.cat} className="deck-list-group">
+                  <div key={g.key} className="deck-list-group">
                     <h4>
-                      {CATEGORY_LABEL[g.cat]}
+                      {g.label}
                       <span className="tnum">{g.items.reduce((a, e) => a + e.quantity, 0)}</span>
                     </h4>
-                    <AnimatePresence initial={false}>
-                      {g.items.map((e) => {
-                        const problem = problemNames.has(e.card.name.toLowerCase());
-                        return (
-                          <motion.div
-                            key={e.card.id}
-                            className={`deck-line${problem ? " problem" : ""}`}
-                            initial={reduced ? false : { opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={reduced ? undefined : { opacity: 0, x: 10 }}
-                            transition={{ duration: 0.18 }}
-                            layout={!reduced}
-                          >
-                            <span className="qty">{e.quantity}×</span>
-                            <span
-                              className="nm"
-                              onMouseEnter={(ev) => setZoom({ card: e.card, x: ev.clientX, y: ev.clientY })}
-                              onMouseMove={(ev) => setZoom((z) => (z ? { ...z, x: ev.clientX, y: ev.clientY } : z))}
-                              onMouseLeave={() => setZoom(null)}
+                    <div className="deck-tiles">
+                      <AnimatePresence initial={false}>
+                        {g.items.map((e) => {
+                          const problem = problemNames.has(e.card.name.toLowerCase());
+                          const isCover = coverCardId === e.card.id;
+                          return (
+                            <motion.div
+                              key={e.card.id}
+                              layout={!reduced}
+                              initial={reduced ? false : { opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={reduced ? undefined : { opacity: 0, scale: 0.8 }}
+                              transition={{ duration: 0.18 }}
                             >
-                              {e.card.name}{" "}
-                              <span className="muted small">
-                                {e.card.setPtcgoCode ?? e.card.setName} {e.card.number}
-                              </span>
-                            </span>
-                            {e.card.isBasicEnergy && (
-                              <>
-                                <button type="button" className="ghost small" onClick={() => setQty(e.card.id, e.quantity - 1)} aria-label={`Remover uma ${e.card.name}`}>
+                              {/* wrapper interno: drag nativo (framer intercepta onDragStart no motion.div) */}
+                              <div
+                                className={`deck-tile${problem ? " problem" : ""}`}
+                                draggable
+                                onDragStart={(ev) => {
+                                  dragId.current = e.card.id;
+                                  ev.dataTransfer.setData("text/plain", e.card.id);
+                                  ev.dataTransfer.effectAllowed = "move";
+                                }}
+                                onDragOver={(ev) => ev.preventDefault()}
+                                onDrop={(ev) => {
+                                  ev.preventDefault();
+                                  if (dragId.current) moveCard(dragId.current, e.card.id);
+                                  dragId.current = null;
+                                }}
+                                onMouseEnter={(ev) => showZoom(e.card, ev)}
+                                onMouseMove={trackZoom}
+                                onMouseLeave={() => setZoom(null)}
+                                title={`${e.quantity}× ${displayName(e.card)}${e.card.namePt ? ` (${e.card.name})` : ""}`}
+                              >
+                              {e.card.imageSmall ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={e.card.imageSmall} alt={displayName(e.card)} loading="lazy" decoding="async" draggable={false} />
+                              ) : (
+                                <span className="deck-view-fallback">{displayName(e.card)}</span>
+                              )}
+                              {e.quantity > 1 && <span className="qty-badge tnum">×{e.quantity}</span>}
+                              {isCover && (
+                                <span className="cover-star" title="Carta-capa do deck">
+                                  ★
+                                </span>
+                              )}
+                              <span className="tile-controls">
+                                <button
+                                  type="button"
+                                  onClick={() => setQty(e.card.id, e.quantity - 1)}
+                                  aria-label={`Remover uma ${displayName(e.card)}`}
+                                  title="Remover 1"
+                                >
                                   −
                                 </button>
-                                <button type="button" className="ghost small" onClick={() => setQty(e.card.id, e.quantity + 1)} aria-label={`Adicionar uma ${e.card.name}`}>
-                                  +
+                                {e.card.isBasicEnergy && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setQty(e.card.id, e.quantity + 1)}
+                                    aria-label={`Adicionar uma ${displayName(e.card)}`}
+                                    title="Adicionar 1"
+                                  >
+                                    +
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setCoverCardId(isCover ? null : e.card.id)}
+                                  aria-label={`Definir ${displayName(e.card)} como capa`}
+                                  title={isCover ? "Remover capa" : "Definir como capa"}
+                                  style={isCover ? { color: "var(--warn)" } : undefined}
+                                >
+                                  {isCover ? "★" : "☆"}
                                 </button>
-                              </>
-                            )}
-                            <button
-                              type="button"
-                              className="ghost small"
-                              onClick={() => setCoverCardId(coverCardId === e.card.id ? null : e.card.id)}
-                              title={coverCardId === e.card.id ? "Carta-capa do deck" : "Definir como carta-capa"}
-                              aria-label={`Definir ${e.card.name} como capa`}
-                              style={coverCardId === e.card.id ? { opacity: 1, color: "var(--warn)" } : undefined}
-                            >
-                              {coverCardId === e.card.id ? "★" : "☆"}
-                            </button>
-                            {!e.card.isBasicEnergy && (
-                              <button type="button" className="ghost small" onClick={() => setQty(e.card.id, 0)} aria-label={`Remover ${e.card.name}`}>
-                                ✕
-                              </button>
-                            )}
-                          </motion.div>
-                        );
-                      })}
-                    </AnimatePresence>
+                              </span>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 ),
             )
@@ -673,12 +758,16 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
           className="card-zoom"
           style={{
             left: Math.min(zoom.x + 18, typeof window !== "undefined" ? window.innerWidth - 280 : 0),
-            top: Math.max(12, Math.min(zoom.y - 180, typeof window !== "undefined" ? window.innerHeight - 380 : 0)),
+            top: Math.max(12, Math.min(zoom.y - 190, typeof window !== "undefined" ? window.innerHeight - 420 : 0)),
           }}
           aria-hidden="true"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={zoom.card.imageLarge ?? zoom.card.imageSmall ?? ""} alt="" />
+          <span className="card-zoom-caption">
+            {displayName(zoom.card)}
+            {zoom.card.namePt && <span className="muted"> · {zoom.card.name}</span>}
+          </span>
         </div>
       )}
     </div>

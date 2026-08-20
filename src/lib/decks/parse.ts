@@ -13,6 +13,7 @@ export function cardToGlc(card: Card, banlist: Set<string>): GlcCard {
   return {
     id: card.id,
     name: card.name,
+    namePt: card.namePt,
     supertype: card.supertype,
     subtypes: card.subtypes,
     types: card.types,

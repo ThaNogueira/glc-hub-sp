@@ -78,9 +78,11 @@ export async function saveDeckAction(payloadJson: string): Promise<{ error?: str
   if (cards.length !== wanted.size) return { error: "Alguma carta não foi encontrada na base." };
 
   const banlist = await getBanlistNormalized();
-  const entries: DeckEntry[] = cards.map((c) => ({
-    card: cardToGlc(c, banlist),
-    quantity: wanted.get(c.id)!,
+  const cardById = new Map(cards.map((c) => [c.id, c]));
+  // preserva a ordem manual definida no builder (vira `position` no banco)
+  const entries: DeckEntry[] = [...wanted.keys()].map((id) => ({
+    card: cardToGlc(cardById.get(id)!, banlist),
+    quantity: wanted.get(id)!,
   }));
 
   const validation = validateDeck(entries, declaredType);
@@ -122,11 +124,12 @@ export async function saveDeckAction(payloadJson: string): Promise<{ error?: str
           version: nextVersion,
           changelog: changelog || null,
           cards: {
-            create: entries.map((e) => ({
+            create: entries.map((e, i) => ({
               cardId: e.card.id,
               rawName: e.card.name,
               quantity: e.quantity,
               category: categoryOf(e.card),
+              position: i,
             })),
           },
         },
@@ -150,11 +153,12 @@ export async function saveDeckAction(payloadJson: string): Promise<{ error?: str
             version: 1,
             changelog: changelog || null,
             cards: {
-              create: entries.map((e) => ({
+              create: entries.map((e, i) => ({
                 cardId: e.card.id,
                 rawName: e.card.name,
                 quantity: e.quantity,
                 category: categoryOf(e.card),
+                position: i,
               })),
             },
           },

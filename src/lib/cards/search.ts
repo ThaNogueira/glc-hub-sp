@@ -11,6 +11,7 @@ import { fold } from "../normalize";
 export type CardHit = {
   id: string;
   name: string;
+  namePt: string | null;
   supertype: string;
   subtypes: string[];
   types: string[];
@@ -51,7 +52,6 @@ export type CardSearchParams = {
   supertype?: string; // Pokémon | Trainer | Energy
   subtype?: string;
   setId?: string;
-  glcOnly?: boolean;
   limit?: number;
 };
 
@@ -59,29 +59,38 @@ export async function searchCards(params: CardSearchParams): Promise<CardHit[]> 
   const q = fold(params.q ?? "");
   const limit = Math.min(Math.max(params.limit ?? 40, 1), 60);
 
-  const conds: Prisma.Sql[] = [];
+  // Só cartas jogáveis no GLC aparecem (pool BW+ contando reprints, sem Rule
+  // Box / ACE SPEC). Banidas são glcLegal=true e entram COM flag — o jogador
+  // precisa ver que a carta existe mas está banida.
+  const conds: Prisma.Sql[] = [Prisma.sql`"glcLegal" = true`];
   if (q.length >= 2) {
-    // prefixo (btree) + palavra interna + fuzzy via operador % (usa o índice GIN trigram)
+    // prefixo (btree) + palavra interna + fuzzy (índice GIN trigram), em EN e PT
     conds.push(
-      Prisma.sql`("nameNormalized" LIKE ${q + "%"} OR "nameNormalized" LIKE ${"% " + q + "%"} OR "nameNormalized" % ${q})`,
+      Prisma.sql`(
+        "nameNormalized" LIKE ${q + "%"} OR "nameNormalized" LIKE ${"% " + q + "%"} OR "nameNormalized" % ${q}
+        OR "namePtNormalized" LIKE ${q + "%"} OR "namePtNormalized" LIKE ${"% " + q + "%"} OR "namePtNormalized" % ${q}
+      )`,
     );
   }
   if (params.type) conds.push(Prisma.sql`${params.type} = ANY(types)`);
   if (params.supertype) conds.push(Prisma.sql`supertype = ${params.supertype}`);
   if (params.subtype) conds.push(Prisma.sql`${params.subtype} = ANY(subtypes)`);
   if (params.setId) conds.push(Prisma.sql`"setId" = ${params.setId}`);
-  if (params.glcOnly) conds.push(Prisma.sql`"glcLegal" = true`);
 
-  if (conds.length === 0) return [];
+  if (conds.length === 1 && q.length < 2) return [];
   const where = Prisma.join(conds, " AND ");
 
   const relevance =
     q.length >= 2
-      ? Prisma.sql`CASE WHEN "nameNormalized" LIKE ${q + "%"} THEN 0 WHEN "nameNormalized" LIKE ${"% " + q + "%"} THEN 1 ELSE 2 END, similarity("nameNormalized", ${q}) DESC,`
+      ? Prisma.sql`CASE
+          WHEN "nameNormalized" LIKE ${q + "%"} OR "namePtNormalized" LIKE ${q + "%"} THEN 0
+          WHEN "nameNormalized" LIKE ${"% " + q + "%"} OR "namePtNormalized" LIKE ${"% " + q + "%"} THEN 1
+          ELSE 2 END,
+          GREATEST(similarity("nameNormalized", ${q}), COALESCE(similarity("namePtNormalized", ${q}), 0)) DESC,`
       : Prisma.empty;
 
   const rows = await prisma.$queryRaw<Omit<CardHit, "banned">[]>(Prisma.sql`
-    SELECT id, name, supertype, subtypes, types, hp, rules, attacks, "setId", "setName",
+    SELECT id, name, "namePt", supertype, subtypes, types, hp, rules, attacks, "setId", "setName",
            "setPtcgoCode", number, rarity, "imageSmall", "imageLarge",
            "hasRuleBox", "isAceSpec", "isBasicEnergy", "glcLegal", "nameNormalized"
     FROM (
@@ -108,11 +117,11 @@ export async function findByPtcgoCode(code: string, number: string) {
   });
 }
 
-/** Lookup por nome exato (fold), impressão mais recente com imagem. */
+/** Lookup por nome exato (fold, EN ou PT), impressão mais recente com imagem. */
 export async function findByName(name: string) {
   const rows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
     SELECT id FROM "Card"
-    WHERE "nameNormalized" = ${fold(name)}
+    WHERE "nameNormalized" = ${fold(name)} OR "namePtNormalized" = ${fold(name)}
     ORDER BY "imageSmall" IS NULL, "setReleaseDate" DESC NULLS LAST
     LIMIT 1
   `);

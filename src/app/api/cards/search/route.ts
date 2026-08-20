@@ -13,7 +13,6 @@ export async function GET(req: NextRequest) {
       supertype: sp.get("supertype") ?? undefined,
       subtype: sp.get("subtype") ?? undefined,
       setId: sp.get("set") ?? undefined,
-      glcOnly: sp.get("glc") === "1",
       limit: sp.get("limit") ? Number(sp.get("limit")) : undefined,
     });
     return NextResponse.json(
