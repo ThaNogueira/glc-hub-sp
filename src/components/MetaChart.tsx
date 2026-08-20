@@ -19,7 +19,8 @@ export function MetaChart({ rows, total }: { rows: MetaChartRow[]; total: number
   const [hover, setHover] = useState<PokemonType | null>(null);
   const reduced = useReducedMotion();
 
-  const R = 74;
+  const R = 92;
+  const CX = 130;
   const C = 2 * Math.PI * R;
   const visible = rows.filter((r) => r.count > 0);
 
@@ -35,35 +36,41 @@ export function MetaChart({ rows, total }: { rows: MetaChartRow[]; total: number
 
   return (
     <div className="metachart">
-      <div className="metachart-donut" onMouseLeave={() => setHover(null)}>
-        <svg viewBox="0 0 200 200" role="img" aria-label="Distribuição de vitórias por tipo">
-          <g transform="rotate(-90 100 100)">
+      <motion.div
+        className="metachart-donut"
+        onMouseLeave={() => setHover(null)}
+        initial={reduced ? false : { opacity: 0, scale: 0.92, rotate: -8 }}
+        whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, ease: [0.3, 0.7, 0.3, 1] }}
+      >
+        <svg viewBox="0 0 260 260" role="img" aria-label="Distribuição de vitórias por tipo">
+          <g transform={`rotate(-90 ${CX} ${CX})`}>
             {slices.map((s, i) => {
               const len = Math.max(0.001, s.share) * C;
-              const gap = visible.length > 1 ? 2.5 : 0;
+              const gap = visible.length > 1 ? 3 : 0;
               const dim = hover !== null && hover !== s.type;
               return (
                 <motion.circle
                   key={s.type}
-                  cx="100"
-                  cy="100"
+                  cx={CX}
+                  cy={CX}
                   r={R}
                   fill="none"
                   stroke={TYPE_BY_ID[s.type].color}
-                  strokeWidth={hover === s.type ? 26 : 20}
+                  strokeWidth={hover === s.type ? 36 : 28}
                   strokeDasharray={`${Math.max(0, len - gap)} ${C - len + gap}`}
                   strokeDashoffset={-s.start * C}
                   initial={reduced ? false : { opacity: 0, strokeDasharray: `0 ${C}` }}
                   animate={{
-                    opacity: dim ? 0.25 : 1,
+                    opacity: dim ? 0.22 : 1,
                     strokeDasharray: `${Math.max(0, len - gap)} ${C - len + gap}`,
                   }}
                   transition={{
-                    strokeDasharray: { duration: 0.7, delay: reduced ? 0 : 0.05 * i, ease: [0.3, 0.7, 0.3, 1] },
+                    strokeDasharray: { duration: 0.8, delay: reduced ? 0 : 0.06 * i, ease: [0.3, 0.7, 0.3, 1] },
                     opacity: { duration: 0.15 },
-                    strokeWidth: { duration: 0.15 },
                   }}
-                  style={{ cursor: "pointer", strokeWidth: hover === s.type ? 26 : 20, transition: "stroke-width 150ms" }}
+                  style={{ cursor: "pointer", transition: "stroke-width 180ms" }}
                   onMouseEnter={() => setHover(s.type)}
                   onFocus={() => setHover(s.type)}
                   tabIndex={-1}
@@ -71,16 +78,40 @@ export function MetaChart({ rows, total }: { rows: MetaChartRow[]; total: number
               );
             })}
           </g>
+
+          {/* ícones dos tipos sobre as fatias (fatias muito finas ficam sem) */}
+          {slices.map((s, i) => {
+            if (s.share < 0.045) return null;
+            const angle = (s.start + s.share / 2) * 2 * Math.PI - Math.PI / 2;
+            const ix = CX + Math.cos(angle) * R;
+            const iy = CX + Math.sin(angle) * R;
+            const size = hover === s.type ? 24 : 19;
+            return (
+              <motion.image
+                key={`icon-${s.type}`}
+                href={typeIconSrc(s.type, 24)}
+                x={ix - size / 2}
+                y={iy - size / 2}
+                width={size}
+                height={size}
+                style={{ pointerEvents: "none" }}
+                initial={reduced ? false : { opacity: 0 }}
+                animate={{ opacity: hover !== null && hover !== s.type ? 0.25 : 1 }}
+                transition={{ duration: 0.2, delay: reduced ? 0 : 0.5 + 0.05 * i }}
+              />
+            );
+          })}
+
           <text
-            x="100"
-            y="94"
+            x={CX}
+            y={CX - 6}
             textAnchor="middle"
             fill="var(--text)"
-            style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 30 }}
+            style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 40 }}
           >
             {hovered ? hovered.count : total}
           </text>
-          <text x="100" y="114" textAnchor="middle" fill="var(--muted)" style={{ fontSize: 11 }}>
+          <text x={CX} y={CX + 20} textAnchor="middle" fill="var(--muted)" style={{ fontSize: 14 }}>
             {hovered ? TYPE_BY_ID[hovered.type].pt : "vitórias"}
           </text>
         </svg>
@@ -114,7 +145,7 @@ export function MetaChart({ rows, total }: { rows: MetaChartRow[]; total: number
             )}
           </div>
         )}
-      </div>
+      </motion.div>
 
       <div className="metachart-bars" onMouseLeave={() => setHover(null)}>
         {rows.map((r, i) => {

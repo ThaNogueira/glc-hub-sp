@@ -10,17 +10,27 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   await requireAdmin();
 
-  const [runs, openIssues, badgeCount, season, badgeRule, pendingClaims, pendingStores, cardCount] =
-    await Promise.all([
-      prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 12 }),
-      prisma.reconciliationIssue.count({ where: { status: "OPEN" } }),
-      prisma.badgeWin.count({ where: { status: "ACTIVE" } }),
-      getSetting<string>("season2026Start"),
-      getSetting<string>("badgeRule"),
-      prisma.profileClaim.count({ where: { status: "PENDING" } }),
-      prisma.storeRequest.count({ where: { status: "PENDING" } }),
-      prisma.card.count(),
-    ]);
+  const [
+    runs,
+    openIssues,
+    badgeCount,
+    season,
+    badgeRule,
+    shinyGifUrl,
+    pendingClaims,
+    pendingStores,
+    cardCount,
+  ] = await Promise.all([
+    prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 12 }),
+    prisma.reconciliationIssue.count({ where: { status: "OPEN" } }),
+    prisma.badgeWin.count({ where: { status: "ACTIVE" } }),
+    getSetting<string>("season2026Start"),
+    getSetting<string>("badgeRule"),
+    getSetting<string>("shinyGifUrl"),
+    prisma.profileClaim.count({ where: { status: "PENDING" } }),
+    prisma.storeRequest.count({ where: { status: "PENDING" } }),
+    prisma.card.count(),
+  ]);
 
   return (
     <>
@@ -133,6 +143,13 @@ export default async function AdminPage() {
             Regra de insígnia vigente (texto exibido no site; muda por votação da comunidade)
           </span>
           <textarea name="badgeRule" rows={3} defaultValue={String(badgeRule)} />
+        </label>
+        <label style={{ display: "grid", gap: "0.2rem" }}>
+          <span className="small muted">
+            Shiny da semana — URL do GIF que decora a home (ex.:
+            https://projectpokemon.org/images/shiny-sprite/kirlia.gif)
+          </span>
+          <input type="url" name="shinyGifUrl" defaultValue={String(shinyGifUrl)} />
         </label>
         <div>
           <button type="submit">Salvar</button>{" "}

@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
 
 /**
- * E-mails transacionais (verificação de conta e reset de senha).
- * Configuração via SMTP_URL (ex.: smtp://user:pass@smtp.resend.com:587).
- * Sem SMTP configurado (dev), o link é impresso no log do servidor.
+ * E-mails transacionais (apenas reset de senha — cadastro não exige
+ * confirmação de e-mail). Configuração via SMTP_URL
+ * (ex.: smtp://user:pass@smtp.resend.com:587).
+ * Sem SMTP configurado, o link é impresso no log do servidor.
  */
 
 function siteUrl(): string {
@@ -34,20 +35,6 @@ const wrap = (inner: string) => `
       Se você não solicitou este e-mail, pode ignorá-lo.
     </p>
   </div>`;
-
-export async function sendVerificationEmail(to: string, token: string) {
-  const link = `${siteUrl()}/verificar-email?token=${token}`;
-  await send(
-    to,
-    "Confirme seu e-mail — GLC Hub SP",
-    `Confirme seu e-mail acessando: ${link}\n(válido por 24 horas)`,
-    wrap(
-      `<p>Bem-vindo à liga! Confirme seu e-mail para ativar a conta:</p>
-       <p><a href="${link}" style="background:#c73a2b;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Confirmar e-mail</a></p>
-       <p style="font-size:13px;color:#555">Ou copie o link: ${link}<br>Válido por 24 horas.</p>`,
-    ),
-  );
-}
 
 export async function sendPasswordResetEmail(to: string, token: string) {
   const link = `${siteUrl()}/redefinir-senha?token=${token}`;

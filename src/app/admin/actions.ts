@@ -245,8 +245,12 @@ export async function updateSettingsAction(formData: FormData) {
   await guard();
   const season = String(formData.get("season2026Start") ?? "").trim();
   const badgeRule = String(formData.get("badgeRule") ?? "").trim();
+  const shinyGifUrl = String(formData.get("shinyGifUrl") ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(season)) await setSetting("season2026Start", season);
   if (badgeRule) await setSetting("badgeRule", badgeRule);
+  if (/^https:\/\/.+\.(gif|png|webp)$/i.test(shinyGifUrl)) {
+    await setSetting("shinyGifUrl", shinyGifUrl);
+  }
   revalidatePath("/", "layout");
   redirect("/admin");
 }

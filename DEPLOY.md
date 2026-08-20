@@ -28,7 +28,7 @@ Edite `.env`:
 | `SITE_URL` | `https://glchub.seudominio.com` |
 | `SYNC_INTERVAL_MINUTES` | `120` (1h–6h) |
 | `CARDS_REFRESH_HOURS` | `168` (refresh semanal da base de cartas) |
-| `SMTP_URL` | SMTP p/ e-mails de verificação/reset (vazio = links no log) |
+| `SMTP_URL` | SMTP p/ "esqueci minha senha" (vazio = link sai no log do web) |
 | `MAIL_FROM` | remetente dos e-mails transacionais |
 | `SHEET_ID` | já aponta para a planilha do circuito |
 

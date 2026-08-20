@@ -8,7 +8,6 @@ import {
   changePasswordAction,
   logoutAction,
   requestStoreAction,
-  resendVerificationAction,
   updateProfileAction,
 } from "./actions";
 
@@ -53,26 +52,11 @@ export default async function AccountPage({
 
       {bemvindo && (
         <p className="form-msg ok">
-          Bem-vindo à liga, {user.displayName}! Enviamos um e-mail de confirmação — verifique sua
-          caixa de entrada.
+          Bem-vindo à liga, {user.displayName}! Sua conta já está ativa — bora montar um deck.
         </p>
       )}
       {erro && <p className="form-msg err">{erro}</p>}
       {ok && <p className="form-msg ok">{ok}</p>}
-
-      {!user.emailVerifiedAt && (
-        <div className="panel" style={{ borderColor: "color-mix(in srgb, var(--warn) 45%, transparent)" }}>
-          <div className="flex-between">
-            <span>
-              <strong>E-mail não verificado.</strong>{" "}
-              <span className="muted">Confirme {user.email} para liberar todos os recursos.</span>
-            </span>
-            <form action={resendVerificationAction}>
-              <button className="secondary small">Reenviar e-mail</button>
-            </form>
-          </div>
-        </div>
-      )}
 
       <div className="grid-2">
         <section className="panel">

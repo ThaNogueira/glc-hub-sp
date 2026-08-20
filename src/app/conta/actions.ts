@@ -9,12 +9,11 @@ import {
   consumeAuthToken,
   createSession,
   destroySession,
-  getSessionUser,
   hashPassword,
   requireUser,
   verifyPassword,
 } from "@/lib/auth";
-import { sendPasswordResetEmail, sendVerificationEmail } from "@/lib/mailer";
+import { sendPasswordResetEmail } from "@/lib/mailer";
 import { clientIp, rateLimit } from "@/lib/rateLimit";
 import { fold } from "@/lib/normalize";
 import { TYPES } from "@/lib/types";
@@ -46,12 +45,16 @@ export async function registerAction(formData: FormData) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) back("/cadastro", { erro: "Já existe uma conta com esse e-mail." });
 
+  // sem confirmação de e-mail: a conta nasce ativa (site de comunidade local)
   const user = await prisma.user.create({
-    data: { email, displayName, passwordHash: await hashPassword(password) },
+    data: {
+      email,
+      displayName,
+      passwordHash: await hashPassword(password),
+      emailVerifiedAt: new Date(),
+    },
   });
 
-  const token = await createAuthToken(user.id, "EMAIL_VERIFY");
-  await sendVerificationEmail(email, token);
   await createSession(user.id);
   redirect("/conta?bemvindo=1");
 }
@@ -78,18 +81,8 @@ export async function logoutAction() {
 }
 
 // ---------------------------------------------------------------------------
-// Verificação de e-mail / recuperação de senha
+// Recuperação de senha
 // ---------------------------------------------------------------------------
-
-export async function resendVerificationAction() {
-  const user = await requireUser();
-  if (user.emailVerifiedAt) redirect("/conta");
-  if (!rateLimit(`verify:${user.id}`, 3, 3_600_000))
-    back("/conta", { erro: "Aguarde antes de reenviar o e-mail." });
-  const token = await createAuthToken(user.id, "EMAIL_VERIFY");
-  await sendVerificationEmail(user.email, token);
-  back("/conta", { ok: "E-mail de verificação reenviado." });
-}
 
 export async function requestResetAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
