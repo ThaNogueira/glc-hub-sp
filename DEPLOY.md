@@ -30,6 +30,8 @@ Edite `.env`:
 | `CARDS_REFRESH_HOURS` | `168` (refresh semanal da base de cartas) |
 | `SMTP_URL` | SMTP p/ "esqueci minha senha" (vazio = link sai no log do web) |
 | `MAIL_FROM` | remetente dos e-mails transacionais |
+| `GOOGLE_CLIENT_ID/SECRET` | login com Google (opcional; redirect: `{SITE_URL}/api/oauth/google/callback`) |
+| `DISCORD_CLIENT_ID/SECRET` | login com Discord (opcional; redirect: `{SITE_URL}/api/oauth/discord/callback`) |
 | `SHEET_ID` | já aponta para a planilha do circuito |
 
 `DATABASE_URL` **não** precisa ser definida no `.env` para o compose — os

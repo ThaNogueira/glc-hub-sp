@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { OAuthButtons } from "@/components/OAuthButtons";
 import { getSessionUser } from "@/lib/auth";
 import { loginAction } from "../conta/actions";
 
@@ -32,6 +33,7 @@ export default async function LoginPage({
         </label>
         <button type="submit">Entrar</button>
       </form>
+      <OAuthButtons />
       <p className="small" style={{ marginTop: "1rem" }}>
         <Link href="/recuperar-senha">Esqueci minha senha</Link>
         {" · "}

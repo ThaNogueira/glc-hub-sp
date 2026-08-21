@@ -13,12 +13,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (await isAdmin()) {
     try {
-      const [claims, stores, issues] = await Promise.all([
+      const [claims, stores, idRequests, issues] = await Promise.all([
         prisma.profileClaim.count({ where: { status: "PENDING" } }),
         prisma.storeRequest.count({ where: { status: "PENDING" } }),
+        prisma.pokemonIdRequest.count({ where: { status: "PENDING" } }),
         prisma.reconciliationIssue.count({ where: { status: "OPEN" } }),
       ]);
-      counts = { pendingAccounts: claims + stores, openIssues: issues };
+      counts = { pendingAccounts: claims + stores + idRequests, openIssues: issues };
     } catch {
       counts = { pendingAccounts: 0, openIssues: 0 };
     }

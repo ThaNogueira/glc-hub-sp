@@ -46,7 +46,8 @@ export default async function AdminUsersPage({
       <p className="lead">
         Papel de cada conta e vínculos com perfil de jogador e loja. Caso clássico: alguém pediu
         conta de loja e acabou criando uma loja duplicada — troque a loja aqui e exclua a
-        duplicata em <Link href="/admin/lojas">Lojas</Link>.
+        duplicata em <Link href="/admin/lojas">Lojas</Link>. Uma conta não pode ser admin e dona
+        de loja ao mesmo tempo.
       </p>
 
       {ok && <p className="form-msg ok">{ok}</p>}

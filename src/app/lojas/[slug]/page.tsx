@@ -29,7 +29,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
     where: { slug },
     include: {
       slots: { orderBy: { weekday: "asc" } },
-      tournaments: { where: { date: { gte: new Date() } }, orderBy: { date: "asc" } },
+      tournaments: { where: { date: { gte: new Date() }, hidden: false }, orderBy: { date: "asc" } },
     },
   });
   if (!venue) notFound();
@@ -116,7 +116,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
                   <tr key={t.id}>
                     <td className="tnum">{formatBrDate(t.date)}</td>
                     <td>{t.time ?? "—"}</td>
-                    <td>{t.name ?? "Torneio GLC"}</td>
+                    <td>{t.name || "Torneio GLC"}</td>
                     <td className="small muted" style={{ whiteSpace: "normal", maxWidth: 280 }}>
                       {[t.priceInfo, t.prizeInfo].filter(Boolean).join(" · ") || "—"}
                       {t.registrationUrl && (

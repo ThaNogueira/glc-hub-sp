@@ -19,6 +19,7 @@ export default async function AdminPage() {
     shinyGifUrl,
     pendingClaims,
     pendingStores,
+    pendingIdChanges,
     cardCount,
     userCount,
     venueCount,
@@ -33,6 +34,7 @@ export default async function AdminPage() {
     getSetting<string>("shinyGifUrl"),
     prisma.profileClaim.count({ where: { status: "PENDING" } }),
     prisma.storeRequest.count({ where: { status: "PENDING" } }),
+    prisma.pokemonIdRequest.count({ where: { status: "PENDING" } }),
     prisma.card.count(),
     prisma.user.count(),
     prisma.venue.count(),
@@ -40,14 +42,14 @@ export default async function AdminPage() {
     prisma.deck.count({ where: { isPublic: true } }),
   ]);
 
-  const pendingAccounts = pendingClaims + pendingStores;
+  const pendingAccounts = pendingClaims + pendingStores + pendingIdChanges;
 
   const sections = [
     {
       href: "/admin/contas",
       icon: "📥",
       title: "Pendências",
-      desc: "Aprovar reivindicações de perfil e pedidos de conta de loja; banlist extra.",
+      desc: "Aprovar perfis, contas de loja e trocas de Player ID; banlist extra.",
       badge: pendingAccounts,
     },
     {

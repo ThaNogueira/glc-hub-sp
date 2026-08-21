@@ -28,7 +28,7 @@ export default async function StorePanelPage({
 
   const [tournaments, results] = await Promise.all([
     prisma.tournament.findMany({
-      where: { venueId: user.venueId, date: { gte: new Date(Date.now() - 86_400_000) } },
+      where: { venueId: user.venueId, date: { gte: new Date(Date.now() - 86_400_000) }, hidden: false },
       orderBy: { date: "asc" },
     }),
     prisma.badgeWin.findMany({
@@ -150,7 +150,7 @@ export default async function StorePanelPage({
                 <tr key={t.id}>
                   <td className="tnum">{formatBrDate(t.date)}</td>
                   <td>{t.time ?? "—"}</td>
-                  <td>{t.name ?? "—"}</td>
+                  <td>{t.name || "—"}</td>
                   <td>
                     {t.origin === "SITE" ? (
                       <span className="chip ok">site</span>

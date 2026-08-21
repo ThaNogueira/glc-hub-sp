@@ -65,7 +65,7 @@ export default async function PlayersPage({
                   <td>
                     <Link href={`/jogadores/${p.slug}`}>{p.name}</Link>
                     {p.claimed && (
-                      <span className="chip accent small" style={{ marginLeft: 8 }} title="Perfil reivindicado">
+                      <span className="chip ok small" style={{ marginLeft: 8 }} title="Perfil verificado">
                         ✓
                       </span>
                     )}

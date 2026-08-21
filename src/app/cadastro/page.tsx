@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { OAuthButtons } from "@/components/OAuthButtons";
 import { getSessionUser } from "@/lib/auth";
 import { registerAction } from "../conta/actions";
 
@@ -37,6 +38,7 @@ export default async function RegisterPage({
         </label>
         <button type="submit">Criar conta</button>
       </form>
+      <OAuthButtons />
       <p className="small" style={{ marginTop: "1rem" }}>
         Já tem conta? <Link href="/entrar">Entrar</Link>
       </p>

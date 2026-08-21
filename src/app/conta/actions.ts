@@ -81,6 +81,46 @@ export async function logoutAction() {
 }
 
 // ---------------------------------------------------------------------------
+// Player ID oficial da Pokémon
+// ---------------------------------------------------------------------------
+
+const POKEMON_ID_RE = /^\d{2,10}$/;
+
+/** Primeiro cadastro do Player ID é livre; depois disso, só via pedido. */
+export async function setPokemonIdAction(formData: FormData) {
+  const user = await requireUser();
+  const value = String(formData.get("pokemonPlayerId") ?? "").replace(/\D/g, "");
+  if (!POKEMON_ID_RE.test(value))
+    back("/conta", { erro: "Player ID inválido — use só os números do seu ID oficial." });
+  if (user.pokemonPlayerId)
+    back("/conta", { erro: "Seu Player ID já está definido — peça a troca ao admin." });
+
+  await prisma.user.update({ where: { id: user.id }, data: { pokemonPlayerId: value } });
+  revalidatePath("/conta");
+  back("/conta", { ok: `Player ID ${value} salvo.` });
+}
+
+/** Pedido de troca do Player ID (aprovado pelo admin). */
+export async function requestPokemonIdChangeAction(formData: FormData) {
+  const user = await requireUser();
+  const value = String(formData.get("newValue") ?? "").replace(/\D/g, "");
+  if (!POKEMON_ID_RE.test(value))
+    back("/conta", { erro: "Player ID inválido — use só os números do seu ID oficial." });
+  if (value === user.pokemonPlayerId)
+    back("/conta", { erro: "Esse já é o seu Player ID atual." });
+
+  const pending = await prisma.pokemonIdRequest.findFirst({
+    where: { userId: user.id, status: "PENDING" },
+  });
+  if (pending)
+    back("/conta", { erro: "Você já tem um pedido de troca aguardando o admin." });
+
+  await prisma.pokemonIdRequest.create({ data: { userId: user.id, newValue: value } });
+  revalidatePath("/conta");
+  back("/conta", { ok: "Pedido de troca enviado — o admin vai revisar." });
+}
+
+// ---------------------------------------------------------------------------
 // Recuperação de senha
 // ---------------------------------------------------------------------------
 

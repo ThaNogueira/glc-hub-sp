@@ -7,7 +7,9 @@ import { DeckCard } from "@/components/DeckCard";
 import {
   changePasswordAction,
   logoutAction,
+  requestPokemonIdChangeAction,
   requestStoreAction,
+  setPokemonIdAction,
   updateProfileAction,
 } from "./actions";
 
@@ -24,7 +26,7 @@ export default async function AccountPage({
   const ok = typeof sp.ok === "string" ? sp.ok : null;
   const bemvindo = sp.bemvindo === "1";
 
-  const [claims, storeRequests, decks] = await Promise.all([
+  const [claims, storeRequests, decks, pendingIdRequest] = await Promise.all([
     prisma.profileClaim.findMany({
       where: { userId: user.id },
       include: { player: true },
@@ -38,6 +40,9 @@ export default async function AccountPage({
       where: { authorUserId: user.id },
       include: { coverCard: true },
       orderBy: { updatedAt: "desc" },
+    }),
+    prisma.pokemonIdRequest.findFirst({
+      where: { userId: user.id, status: "PENDING" },
     }),
   ]);
 
@@ -107,6 +112,70 @@ export default async function AccountPage({
             </div>
           </form>
         </section>
+      </div>
+
+      <h2>Player ID Pokémon</h2>
+      <div className="panel">
+        {user.pokemonPlayerId ? (
+          <>
+            <p style={{ marginTop: 0 }}>
+              Seu Player ID oficial: <strong className="tnum">{user.pokemonPlayerId}</strong>{" "}
+              <span className="muted small">(as lojas usam para registrar torneios)</span>
+            </p>
+            {pendingIdRequest ? (
+              <p className="muted small" style={{ marginBottom: 0 }}>
+                Pedido de troca para <strong className="tnum">{pendingIdRequest.newValue}</strong>{" "}
+                aguardando aprovação do admin.
+              </p>
+            ) : (
+              <>
+                <p className="muted small">
+                  Digitou errado? O Player ID não pode ser trocado direto — peça a alteração e o
+                  admin revisa:
+                </p>
+                <form action={requestPokemonIdChangeAction} className="filter-bar" style={{ margin: 0 }}>
+                  <label>
+                    Novo Player ID
+                    <input
+                      type="text"
+                      name="newValue"
+                      inputMode="numeric"
+                      pattern="[0-9]{2,10}"
+                      placeholder="somente números"
+                      required
+                    />
+                  </label>
+                  <button type="submit" className="secondary small">
+                    Pedir troca
+                  </button>
+                </form>
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="muted small" style={{ marginTop: 0 }}>
+              Cadastre o seu <strong>Player ID oficial da Pokémon</strong> (o número que você usa
+              em torneios). As lojas do circuito veem esse número no seu perfil para lançar
+              resultados. <strong>Atenção:</strong> depois de salvo, só muda com aprovação do
+              admin — confira antes de enviar.
+            </p>
+            <form action={setPokemonIdAction} className="filter-bar" style={{ margin: 0 }}>
+              <label>
+                Player ID
+                <input
+                  type="text"
+                  name="pokemonPlayerId"
+                  inputMode="numeric"
+                  pattern="[0-9]{2,10}"
+                  placeholder="somente números"
+                  required
+                />
+              </label>
+              <button type="submit">Salvar Player ID</button>
+            </form>
+          </>
+        )}
       </div>
 
       <h2>Perfil de jogador</h2>

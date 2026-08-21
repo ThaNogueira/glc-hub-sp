@@ -64,8 +64,9 @@ export async function syncSchedule(ctx: SyncContext, tabTitle: string): Promise<
   const venueIdByCol = new Map<number, string>();
   for (const sc of storeCols) {
     const venueId = await ctx.resolveVenue(sc.name, { silent: true });
-    await prisma.venue.update({
-      where: { id: venueId },
+    // manualLock = admin editou a loja no painel; a planilha deixa de mandar
+    await prisma.venue.updateMany({
+      where: { id: venueId, manualLock: false },
       data: {
         neighborhood: sc.neighborhood ?? undefined,
         status: sc.active ? "ACTIVE" : "HIATUS",
@@ -77,7 +78,8 @@ export async function syncSchedule(ctx: SyncContext, tabTitle: string): Promise<
     else stats.hiatusStores++;
   }
 
-  // Grade semanal: substitui os slots existentes pelos da planilha
+  // Grade semanal: substitui os slots da planilha, preservando os manuais
+  // (horário corrigido no admin, ou "sem torneio" fixado com time NULL)
   const seenSlots: { venueId: string; weekday: number; time: string }[] = [];
   for (const { i, wd } of weekdayIdxs) {
     for (const [col, venueId] of venueIdByCol) {
@@ -86,16 +88,21 @@ export async function syncSchedule(ctx: SyncContext, tabTitle: string): Promise<
     }
   }
   for (const slot of seenSlots) {
-    await prisma.weeklySlot.upsert({
+    const existing = await prisma.weeklySlot.findUnique({
       where: { venueId_weekday: { venueId: slot.venueId, weekday: slot.weekday } },
-      create: slot,
-      update: { time: slot.time },
     });
+    if (existing?.manual) continue; // editado no admin — planilha não sobrescreve
+    if (existing) {
+      await prisma.weeklySlot.update({ where: { id: existing.id }, data: { time: slot.time } });
+    } else {
+      await prisma.weeklySlot.create({ data: slot });
+    }
   }
   if (seenSlots.length) {
-    // remove slots que saíram da grade (sem tocar em nada se o parse vier vazio)
+    // remove slots que saíram da grade (nunca os manuais; nada se o parse vier vazio)
     await prisma.weeklySlot.deleteMany({
       where: {
+        manual: false,
         NOT: { OR: seenSlots.map((s) => ({ venueId: s.venueId, weekday: s.weekday })) },
       },
     });
@@ -123,12 +130,20 @@ export async function syncSchedule(ctx: SyncContext, tabTitle: string): Promise<
         continue;
       }
       const venueId = await ctx.resolveVenue(rawVenue);
+
+      // Se o admin editou/escondeu um torneio com essa data+nome (ex.: trocou
+      // a loja associada), a linha da planilha não recria nem sobrescreve.
+      const manualTwin = await prisma.tournament.findFirst({
+        where: { date, name: rawName || "", OR: [{ manual: true }, { hidden: true }] },
+      });
+      if (manualTwin) continue;
+
       await prisma.tournament.upsert({
         where: { venueId_date_name: { venueId, date, name: rawName || "" } },
         create: {
           venueId,
           date,
-          name: rawName || null,
+          name: rawName || "", // "" (não NULL) para o upsert casar na unique
           time: rawTime || null,
           origin: "SHEET",
         },

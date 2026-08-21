@@ -173,8 +173,20 @@ export async function reviewStoreRequestAction(formData: FormData) {
   await guard();
   const id = String(formData.get("id") ?? "");
   const approve = String(formData.get("decision")) === "approve";
-  const req = await prisma.storeRequest.findUnique({ where: { id } });
+  const req = await prisma.storeRequest.findUnique({
+    where: { id },
+    include: { user: { select: { role: true, email: true } } },
+  });
   if (!req || req.status !== "PENDING") return;
+
+  // uma conta não pode ser admin E dona de loja ao mesmo tempo
+  if (approve && req.user.role === "ADMIN") {
+    redirect(
+      `/admin/contas?erro=${encodeURIComponent(
+        `${req.user.email} é admin — uma conta não pode ser admin e loja ao mesmo tempo. Rebaixe o papel em Usuários antes, ou rejeite o pedido.`,
+      )}`,
+    );
+  }
 
   if (approve) {
     const { fold: foldName, slugify } = await import("@/lib/normalize");
@@ -201,6 +213,34 @@ export async function reviewStoreRequestAction(formData: FormData) {
     ]);
   } else {
     await prisma.storeRequest.update({
+      where: { id },
+      data: { status: "REJECTED", reviewedAt: new Date() },
+    });
+  }
+  revalidatePath("/admin/contas");
+}
+
+/** Aprova/rejeita pedido de troca do Player ID oficial. */
+export async function reviewPokemonIdAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const approve = String(formData.get("decision")) === "approve";
+  const req = await prisma.pokemonIdRequest.findUnique({ where: { id } });
+  if (!req || req.status !== "PENDING") return;
+
+  if (approve) {
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.userId },
+        data: { pokemonPlayerId: req.newValue },
+      }),
+      prisma.pokemonIdRequest.update({
+        where: { id },
+        data: { status: "APPROVED", reviewedAt: new Date() },
+      }),
+    ]);
+  } else {
+    await prisma.pokemonIdRequest.update({
       where: { id },
       data: { status: "REJECTED", reviewedAt: new Date() },
     });
@@ -246,8 +286,10 @@ export async function updateVenueDetailsAction(formData: FormData) {
   const address = String(formData.get("address") ?? "").trim();
   const kind = String(formData.get("kind")) as VenueKind;
   const status = String(formData.get("status")) as VenueStatus;
+  const manualLock = String(formData.get("manualLock")) === "on";
+  const back = formData.get("back") ? `/admin/lojas/${id}` : "/admin/lojas";
   if (!id || !name || !["STORE", "EVENT"].includes(kind) || !["ACTIVE", "HIATUS"].includes(status))
-    redirect("/admin/lojas?erro=Dados inválidos.");
+    redirect(`${back}?erro=Dados inválidos.`);
 
   const venue = await prisma.venue.findUnique({ where: { id } });
   if (!venue) redirect("/admin/lojas?erro=Loja não encontrada.");
@@ -255,10 +297,17 @@ export async function updateVenueDetailsAction(formData: FormData) {
   try {
     await prisma.venue.update({
       where: { id },
-      data: { name, neighborhood: neighborhood || null, address: address || null, kind, status },
+      data: {
+        name,
+        neighborhood: neighborhood || null,
+        address: address || null,
+        kind,
+        status,
+        manualLock,
+      },
     });
   } catch {
-    redirect(`/admin/lojas?erro=Já existe uma loja chamada "${name}".`);
+    redirect(`${back}?erro=Já existe uma loja chamada "${name}".`);
   }
 
   // o nome antigo e o novo viram aliases (o sync continua reconhecendo os dois)
@@ -273,7 +322,108 @@ export async function updateVenueDetailsAction(formData: FormData) {
   revalidatePath("/admin/lojas");
   revalidatePath("/lojas");
   revalidatePath("/agenda");
-  redirect(`/admin/lojas?ok=Loja "${name}" atualizada.`);
+  redirect(`${back}?ok=Loja "${name}" atualizada.`);
+}
+
+/**
+ * Salva a grade semanal de uma loja. Campo alterado em relação à planilha
+ * vira `manual` (o sync não sobrescreve); "seguir planilha" remove a trava.
+ */
+export async function saveVenueScheduleAction(formData: FormData) {
+  await guard();
+  const venueId = String(formData.get("venueId") ?? "");
+  const venue = await prisma.venue.findUnique({
+    where: { id: venueId },
+    include: { slots: true },
+  });
+  if (!venue) redirect("/admin/lojas?erro=Loja não encontrada.");
+  const back = `/admin/lojas/${venueId}`;
+
+  for (let weekday = 1; weekday <= 7; weekday++) {
+    const time = String(formData.get(`time_${weekday}`) ?? "").replace(/\s+/g, " ").trim();
+    const existing = venue.slots.find((s) => s.weekday === weekday);
+    const current = existing?.time ?? "";
+
+    if (time === current) continue; // sem mudança — mantém como está (inclusive a trava)
+
+    if (existing) {
+      // vazio = "sem torneio nesse dia": mantém o slot com time NULL + manual,
+      // senão o sync recriaria o horário da planilha no próximo ciclo
+      await prisma.weeklySlot.update({
+        where: { id: existing.id },
+        data: { time: time || null, manual: true },
+      });
+    } else if (time) {
+      await prisma.weeklySlot.create({ data: { venueId, weekday, time, manual: true } });
+    }
+  }
+
+  revalidatePath("/agenda");
+  revalidatePath(`/lojas/${venue.slug}`);
+  redirect(`${back}?ok=Grade semanal salva.`);
+}
+
+/** Remove a trava manual de um slot — volta a seguir a planilha. */
+export async function resetSlotAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const slot = await prisma.weeklySlot.findUnique({ where: { id }, include: { venue: true } });
+  if (!slot) return;
+  // apaga o slot: o próximo sync recria (ou não) conforme a planilha
+  await prisma.weeklySlot.delete({ where: { id } });
+  revalidatePath("/agenda");
+  redirect(`/admin/lojas/${slot.venueId}?ok=Slot voltou a seguir a planilha (aplica no próximo sync).`);
+}
+
+/** Cria ou edita um torneio (inclusive trocando a loja associada). */
+export async function saveTournamentAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const venueId = String(formData.get("venueId") ?? "");
+  const rawDate = String(formData.get("date") ?? "").trim(); // yyyy-mm-dd (input date)
+  const time = String(formData.get("time") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const backVenue = String(formData.get("backVenue") ?? venueId);
+  const back = `/admin/lojas/${backVenue}`;
+
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? new Date(`${rawDate}T12:00:00Z`) : null;
+  if (!venueId || !date) redirect(`${back}?erro=Data ou loja inválida.`);
+
+  try {
+    if (id) {
+      await prisma.tournament.update({
+        where: { id },
+        data: { venueId, date, time: time || null, name, manual: true },
+      });
+    } else {
+      await prisma.tournament.create({
+        data: { venueId, date, time: time || null, name, origin: "SITE", manual: true },
+      });
+    }
+  } catch {
+    redirect(`${back}?erro=Já existe um torneio igual (mesma loja, data e nome).`);
+  }
+
+  revalidatePath("/agenda");
+  revalidatePath("/lojas");
+  redirect(`${back}?ok=Torneio salvo.`);
+}
+
+/** Exclui um torneio. Vindos da planilha ficam ocultos (para o sync não recriar). */
+export async function deleteTournamentAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const t = await prisma.tournament.findUnique({ where: { id } });
+  if (!t) return;
+  const back = `/admin/lojas/${String(formData.get("backVenue") ?? t.venueId)}`;
+
+  if (t.origin === "SHEET") {
+    await prisma.tournament.update({ where: { id }, data: { hidden: true, manual: true } });
+  } else {
+    await prisma.tournament.delete({ where: { id } });
+  }
+  revalidatePath("/agenda");
+  redirect(`${back}?ok=Torneio removido da agenda.`);
 }
 
 /** Exclui uma loja/evento sem resultados (com resultados, use o merge). */
@@ -386,6 +536,12 @@ export async function updateUserAction(formData: FormData) {
       redirect(`/admin/usuarios?erro=O perfil "${player.name}" já pertence a outra conta.`);
     playerId = player.id;
   }
+
+  // uma conta não pode ser admin E dona de loja ao mesmo tempo
+  if (role === "ADMIN" && venueId)
+    redirect(
+      "/admin/usuarios?erro=Uma conta não pode ser admin e dona de loja ao mesmo tempo — escolha um dos dois.",
+    );
 
   // loja: vazio desvincula; ocupada por outra conta é bloqueada
   if (venueId) {

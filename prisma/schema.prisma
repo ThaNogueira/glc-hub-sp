@@ -168,6 +168,7 @@ model Venue {
   address      String? // extraído da aba oculta de rank da loja ("Endereço: ...")
   kind         VenueKind   @default(STORE)
   status       VenueStatus @default(ACTIVE)
+  manualLock   Boolean     @default(false) // true = admin editou; sync não sobrescreve
   createdAt    DateTime    @default(now())
 
   aliases       VenueAlias[]
@@ -194,7 +195,8 @@ model WeeklySlot {
   venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
   venueId   String
   weekday   Int // 1 = segunda ... 7 = domingo
-  time      String? // texto livre da célula: "20h", "19h30", "Mensal (confirmar no grupo)"
+  time      String? // texto livre da célula ("20h"); NULL + manual = "sem torneio" fixado
+  manual    Boolean  @default(false) // true = editado no admin; sync não sobrescreve
   updatedAt DateTime @updatedAt
 
   @@unique([venueId, weekday])
@@ -215,6 +217,8 @@ model Tournament {
   registrationUrl String?
   description     String?
   origin          RecordOrigin @default(SHEET)
+  manual          Boolean      @default(false) // editado no admin; sync não sobrescreve/recria
+  hidden          Boolean      @default(false) // excluído no admin (fica p/ sync não recriar)
   createdByUserId String?
   createdAt       DateTime     @default(now())
   badges          BadgeWin[]
@@ -332,6 +336,9 @@ model User {
   emailVerifiedAt DateTime?
   avatarUrl       String?
   favoriteType    PokemonType? // acento de cor do perfil
+  /// Player ID oficial da Pokémon (as lojas usam no TOM). Depois de definido,
+  /// só muda com pedido aprovado pelo admin (PokemonIdRequest).
+  pokemonPlayerId String?
   createdAt       DateTime  @default(now())
 
   // perfil de jogador reivindicado (aprovação do admin)
@@ -348,6 +355,22 @@ model User {
   decks         Deck[]
   votes         DeckVote[]
   storeRequests StoreRequest[]
+  pokemonIdRequests PokemonIdRequest[]
+}
+
+/// Pedido de troca do Player ID oficial (o primeiro cadastro é livre;
+/// trocas precisam de aprovação do admin).
+model PokemonIdRequest {
+  id           String      @id @default(cuid())
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  newValue     String
+  status       ClaimStatus @default(PENDING)
+  createdAt    DateTime    @default(now())
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  @@index([status])
 }
 
 model AuthSession {

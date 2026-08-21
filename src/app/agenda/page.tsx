@@ -32,7 +32,7 @@ export default async function AgendaPage() {
       orderBy: { name: "asc" },
     }),
     prisma.tournament.findMany({
-      where: { date: { gte: new Date(Date.now() - 7 * 86_400_000) } },
+      where: { date: { gte: new Date(Date.now() - 7 * 86_400_000) }, hidden: false },
       include: { venue: true },
       orderBy: { date: "asc" },
     }),
@@ -109,7 +109,7 @@ export default async function AgendaPage() {
                     </td>
                     <td>{t.time ?? "—"}</td>
                     <td>
-                      {t.name ?? "—"}
+                      {t.name || "—"}
                       {t.origin === "SITE" && (
                         <span className="chip ok" style={{ marginLeft: 6 }}>
                           publicado pela loja

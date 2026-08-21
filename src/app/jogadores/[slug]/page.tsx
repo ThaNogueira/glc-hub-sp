@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { InsigniaShowcase, type InsigniaInfo } from "@/components/InsigniaShowcase";
 import { TypeBadge } from "@/components/TypeBadge";
 import { DeckCard } from "@/components/DeckCard";
+import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatBrDate } from "@/lib/normalize";
 import { TYPE_BY_ID } from "@/lib/types";
@@ -18,7 +19,14 @@ async function getPlayer(slug: string) {
         orderBy: [{ date: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       },
       externalRefs: true,
-      user: { select: { displayName: true, avatarUrl: true, favoriteType: true } },
+      user: {
+        select: {
+          displayName: true,
+          avatarUrl: true,
+          favoriteType: true,
+          pokemonPlayerId: true,
+        },
+      },
       decks: {
         where: { isPublic: true },
         include: { coverCard: true, author: { select: { displayName: true } } },
@@ -50,8 +58,13 @@ export async function generateMetadata({
 
 export default async function PlayerPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const player = await getPlayer(slug);
+  const [player, viewer] = await Promise.all([getPlayer(slug), getSessionUser()]);
   if (!player) notFound();
+
+  // Player ID oficial: visível para lojas, admin e para o próprio jogador
+  const canSeePokemonId =
+    !!viewer &&
+    (viewer.role === "STORE" || viewer.role === "ADMIN" || viewer.playerId === player.id);
 
   // agregados por tipo + primeira conquista (para o tooltip das insígnias)
   const perType = new Map<string, { count: number; firstDate: Date | null; firstVenue: string | null }>();
@@ -110,11 +123,17 @@ export default async function PlayerPage({ params }: { params: Promise<{ slug: s
                   </span>
                 )}
                 {player.user && (
-                  <span className="chip accent" title="Perfil reivindicado pelo jogador">
-                    ✓ perfil reivindicado
+                  <span className="chip ok" title="Perfil verificado — o próprio jogador administra este perfil">
+                    ✓ verificado
                   </span>
                 )}
               </div>
+              {canSeePokemonId && player.user?.pokemonPlayerId && (
+                <p className="small muted" style={{ margin: "0.35rem 0 0" }}>
+                  Player ID Pokémon: <strong className="tnum">{player.user.pokemonPlayerId}</strong>{" "}
+                  <span title="Visível só para lojas e admin">🔒</span>
+                </p>
+              )}
             </div>
           </div>
           {distinct === 11 && <span className="chip ok">Coleção completa — 11 insígnias!</span>}
