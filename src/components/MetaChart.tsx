@@ -40,8 +40,7 @@ export function MetaChart({ rows, total }: { rows: MetaChartRow[]; total: number
         className="metachart-donut"
         onMouseLeave={() => setHover(null)}
         initial={reduced ? false : { opacity: 0, scale: 0.92, rotate: -8 }}
-        whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
-        viewport={{ once: true }}
+        animate={{ opacity: 1, scale: 1, rotate: 0 }}
         transition={{ duration: 0.5, ease: [0.3, 0.7, 0.3, 1] }}
       >
         <svg viewBox="0 0 260 260" role="img" aria-label="Distribuição de vitórias por tipo">
@@ -172,8 +171,7 @@ export function MetaChart({ rows, total }: { rows: MetaChartRow[]; total: number
                     transformOrigin: "left center",
                   }}
                   initial={reduced ? false : { scaleX: 0 }}
-                  whileInView={{ scaleX: 1 }}
-                  viewport={{ once: true }}
+                  animate={{ scaleX: 1 }}
                   transition={{ duration: 0.6, delay: reduced ? 0 : 0.04 * i, ease: [0.3, 0.7, 0.3, 1] }}
                 />
               </div>
