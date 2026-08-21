@@ -78,7 +78,7 @@ export default async function AccountPage({
               <input type="url" name="avatarUrl" defaultValue={user.avatarUrl ?? ""} placeholder="https://..." />
             </label>
             <label className="field">
-              Tipo favorito (acento de cor do seu perfil)
+              Tipo signature (badge e cor do seu perfil público)
               <select name="favoriteType" defaultValue={user.favoriteType ?? ""}>
                 <option value="">— automático (tipo com mais vitórias)</option>
                 {TYPES.map((t) => (

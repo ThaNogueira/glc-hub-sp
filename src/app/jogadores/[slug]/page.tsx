@@ -117,9 +117,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ slug: s
             <div>
               <h1>{player.name}</h1>
               <div className="flex-row" style={{ marginTop: "0.35rem" }}>
-                {signature && (
+                {accentType && (
                   <span className="small muted">
-                    Tipo signature: <TypeBadge type={signature} />
+                    Tipo signature: <TypeBadge type={accentType} />
+                    {player.user?.favoriteType && player.user.favoriteType !== signature && (
+                      <span className="muted" title="Escolhido pelo jogador (o automático seria o tipo com mais vitórias)">
+                        {" "}★
+                      </span>
+                    )}
                   </span>
                 )}
                 {player.user && (

@@ -1,12 +1,13 @@
 "use server";
 
-import type { IssueStatus, Role, TabKind, VenueKind, VenueStatus } from "@prisma/client";
+import type { IssueStatus, PokemonType, Role, TabKind, VenueKind, VenueStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAdmin, loginAdmin, logoutAdmin } from "@/lib/adminAuth";
 import { prisma } from "@/lib/db";
 import { fold } from "@/lib/normalize";
 import { setSetting } from "@/lib/settings";
+import { TYPES } from "@/lib/types";
 import { runSync } from "@/lib/sync/run";
 
 async function guard() {
@@ -512,8 +513,12 @@ export async function updateUserAction(formData: FormData) {
   const role = String(formData.get("role")) as Role;
   const playerName = String(formData.get("playerName") ?? "").trim();
   const venueId = String(formData.get("venueId") ?? "");
+  const favoriteRaw = String(formData.get("favoriteType") ?? "");
   if (!id || !["PLAYER", "STORE", "ADMIN"].includes(role))
     redirect("/admin/usuarios?erro=Dados inválidos.");
+  const favoriteType = TYPES.some((t) => t.id === favoriteRaw)
+    ? (favoriteRaw as PokemonType)
+    : null;
 
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) redirect("/admin/usuarios?erro=Usuário não encontrado.");
@@ -555,9 +560,10 @@ export async function updateUserAction(formData: FormData) {
 
   await prisma.user.update({
     where: { id },
-    data: { role, playerId, venueId: venueId || null },
+    data: { role, playerId, venueId: venueId || null, favoriteType },
   });
   revalidatePath("/admin/usuarios");
+  revalidatePath("/jogadores");
   redirect(`/admin/usuarios?ok=Usuário ${user.email} atualizado.`);
 }
 

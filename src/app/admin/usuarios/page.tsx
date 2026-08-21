@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/adminAuth";
 import { prisma } from "@/lib/db";
+import { TYPES } from "@/lib/types";
 import { deleteUserAction, updateUserAction } from "../actions";
 
 export const metadata = { title: "Admin — usuários", robots: { index: false } };
@@ -106,6 +107,17 @@ export default async function AdminUsersPage({
                   <option key={v.id} value={v.id}>
                     {v.name}
                     {v.kind === "EVENT" ? " (evento)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label title="Tipo exibido no perfil do jogador (cor e badge). Automático = tipo com mais vitórias.">
+              Tipo signature
+              <select name="favoriteType" defaultValue={u.favoriteType ?? ""}>
+                <option value="">automático</option>
+                {TYPES.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.pt}
                   </option>
                 ))}
               </select>
