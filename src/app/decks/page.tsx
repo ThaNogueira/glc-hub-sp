@@ -23,7 +23,10 @@ export default async function DecksPage({
   const tipo = one(sp.tipo);
   const carta = one(sp.carta).trim();
   const autor = one(sp.autor).trim();
-  const ordenar = one(sp.ordenar) === "vistos" ? "vistos" : "recentes";
+  const ordenarRaw = one(sp.ordenar);
+  const ordenar = ["recentes", "vistos", "relevantes"].includes(ordenarRaw)
+    ? (ordenarRaw as "recentes" | "vistos" | "relevantes")
+    : "relevantes";
 
   const where: Prisma.DeckWhereInput = { isPublic: true };
   if (TYPES.some((t) => t.id === tipo)) where.type = tipo as Prisma.DeckWhereInput["type"];
@@ -44,8 +47,14 @@ export default async function DecksPage({
         coverCard: true,
         author: { select: { displayName: true } },
         player: { select: { name: true } },
+        _count: { select: { votes: true } },
       },
-      orderBy: ordenar === "vistos" ? { views: "desc" } : { updatedAt: "desc" },
+      orderBy:
+        ordenar === "vistos"
+          ? [{ views: "desc" as const }, { updatedAt: "desc" as const }]
+          : ordenar === "relevantes"
+            ? [{ votes: { _count: "desc" as const } }, { updatedAt: "desc" as const }]
+            : [{ updatedAt: "desc" as const }],
       take: 60,
     }),
     getSessionUser(),
@@ -86,6 +95,7 @@ export default async function DecksPage({
         <label>
           Ordenar
           <select name="ordenar" defaultValue={ordenar}>
+            <option value="relevantes">Relevantes (upvotes)</option>
             <option value="recentes">Mais recentes</option>
             <option value="vistos">Mais vistos</option>
           </select>
@@ -109,6 +119,7 @@ export default async function DecksPage({
                   authorName: d.player?.name ?? d.author?.displayName ?? null,
                   updatedAt: d.updatedAt.toISOString(),
                   views: d.views,
+                  votes: d._count.votes,
                 }}
               />
             </Reveal>

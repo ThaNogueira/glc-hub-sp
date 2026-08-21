@@ -558,14 +558,18 @@ model ExternalDeckRef {
   importedAt DateTime        @default(now())
 }
 
-/// Deck da semana (Fase 3): um voto por usuário por semana.
+/// Upvote em deck: um por usuário por deck. weekKey registra a semana em que
+/// o voto foi dado — alimenta o carrossel "decks em alta da semana" da home.
 model DeckVote {
-  id      String @id @default(cuid())
-  deck    Deck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  deckId  String
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId  String
-  weekKey String // "2026-W34"
+  id        String   @id @default(cuid())
+  deck      Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  deckId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  weekKey   String // "2026-W34"
+  createdAt DateTime @default(now())
 
-  @@unique([userId, weekKey])
+  @@unique([userId, deckId])
+  @@index([weekKey])
+  @@index([deckId])
 }

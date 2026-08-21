@@ -8,7 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { getBanlist } from "@/lib/cards/search";
 import { cardToGlc, parseDeckText, parseDeckUrl, type ParsedDeck } from "@/lib/decks/parse";
 import { categoryOf, validateDeck, type DeckEntry } from "@/lib/glc";
-import { slugify } from "@/lib/normalize";
+import { isoWeekKey, slugify } from "@/lib/normalize";
 import { TYPES } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -170,6 +170,32 @@ export async function saveDeckAction(payloadJson: string): Promise<{ error?: str
 
   revalidatePath("/decks");
   redirect(`/decks/${slug}`);
+}
+
+/** Upvote (toggle): um voto por usuário por deck; a semana fica registrada. */
+export async function toggleDeckVoteAction(formData: FormData) {
+  const user = await requireUser();
+  const deckId = String(formData.get("deckId") ?? "");
+  const back = String(formData.get("back") ?? "");
+
+  const deck = await prisma.deck.findUnique({ where: { id: deckId } });
+  if (!deck || (!deck.isPublic && deck.authorUserId !== user.id)) return;
+
+  const existing = await prisma.deckVote.findUnique({
+    where: { userId_deckId: { userId: user.id, deckId } },
+  });
+  if (existing) {
+    await prisma.deckVote.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.deckVote.create({
+      data: { userId: user.id, deckId, weekKey: isoWeekKey() },
+    });
+  }
+
+  revalidatePath(`/decks/${deck.slug}`);
+  revalidatePath("/decks");
+  revalidatePath("/");
+  redirect(back.startsWith("/") ? back : `/decks/${deck.slug}`);
 }
 
 export async function deleteDeckAction(formData: FormData) {

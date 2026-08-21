@@ -1421,6 +1421,94 @@ button:disabled {
   width: 100%;
 }
 
+/* ---------- upvotes e home ---------- */
+
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast),
+    transform var(--t-fast);
+  box-shadow: none;
+}
+.vote-btn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  transform: translateY(-1px);
+  text-decoration: none;
+  filter: none;
+  background: var(--surface-2);
+}
+.vote-btn.voted {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+.vote-count {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.home-card h2 {
+  font-size: 1.1rem;
+}
+.home-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.home-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  font-size: 0.92rem;
+  min-width: 0;
+}
+.home-time {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.carousel {
+  display: flex;
+  gap: 0.9rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0.25rem 0.25rem 0.9rem;
+  margin: 0 -0.25rem;
+  scrollbar-width: thin;
+}
+.carousel > * {
+  flex: 0 0 min(300px, 82vw);
+  scroll-snap-align: start;
+  min-width: 0;
+}
+.carousel .deck-card {
+  height: 100%;
+}
+
 /* ---------- painel admin ---------- */
 
 .admin-nav {

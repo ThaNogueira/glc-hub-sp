@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/CopyButton";
 import { DeckCardsView, type CardView } from "@/components/DeckCardsView";
 import { TypeBadge } from "@/components/TypeBadge";
+import { VoteButton } from "@/components/VoteButton";
 import { getSessionUser } from "@/lib/auth";
 import { getBanlist } from "@/lib/cards/search";
 import { cardToGlc } from "@/lib/decks/parse";
@@ -26,6 +27,7 @@ async function getDeck(slug: string) {
         include: { cards: { include: { card: true }, orderBy: { position: "asc" } } },
       },
       resultLinks: { include: { badgeWin: { include: { venue: true } } } },
+      _count: { select: { votes: true } },
     },
   });
 }
@@ -58,6 +60,13 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
 
   const isOwner = !!user && (deck.author?.id === user.id || user.role === "ADMIN");
   if (!deck.isPublic && !isOwner) notFound();
+
+  const myVote = user
+    ? await prisma.deckVote.findUnique({
+        where: { userId_deckId: { userId: user.id, deckId: deck.id } },
+        select: { id: true },
+      })
+    : null;
 
   // contador de views (não conta o próprio autor)
   if (deck.isPublic && !isOwner) {
@@ -182,6 +191,13 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
             </div>
           </div>
           <div className="flex-row">
+            <VoteButton
+              deckId={deck.id}
+              count={deck._count.votes}
+              voted={!!myVote}
+              back={`/decks/${deck.slug}`}
+              loggedIn={!!user}
+            />
             <CopyButton text={exportText} />
             {isOwner && (
               <Link href={`/decks/${deck.slug}/editar`} className="btn small">

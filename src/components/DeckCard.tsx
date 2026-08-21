@@ -13,6 +13,7 @@ export type DeckCardData = {
   authorName: string | null;
   updatedAt: string; // ISO
   views: number;
+  votes?: number; // upvotes (total ou da semana, conforme o contexto)
 };
 
 /** Card de deck na galeria: carta-capa + tipo + autor, glow do tipo no hover. */
@@ -45,6 +46,11 @@ export function DeckCard({ deck }: { deck: DeckCardData }) {
           )}
         </span>
         <span className="meta-line" style={{ marginTop: "0.3rem" }}>
+          {(deck.votes ?? 0) > 0 && (
+            <span className="vote-count tnum" title="Upvotes da comunidade">
+              ▲ {deck.votes}
+            </span>
+          )}
           {deck.authorName && <span>{deck.authorName}</span>}
           <span>·</span>
           <span>{new Date(deck.updatedAt).toLocaleDateString("pt-BR")}</span>
