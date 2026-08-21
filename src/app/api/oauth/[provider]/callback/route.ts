@@ -15,8 +15,11 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await params;
+  // atrás do proxy, req.url é o host interno (0.0.0.0:3000) — os redirects
+  // precisam usar a URL pública
+  const base = process.env.SITE_URL ?? req.url;
   const fail = (msg: string) =>
-    NextResponse.redirect(new URL(`/entrar?erro=${encodeURIComponent(msg)}`, req.url));
+    NextResponse.redirect(new URL(`/entrar?erro=${encodeURIComponent(msg)}`, base));
 
   if (
     (provider !== "google" && provider !== "discord") ||
@@ -58,7 +61,7 @@ export async function GET(
 
     await createSession(user.id);
     const res = NextResponse.redirect(
-      new URL(isNew ? "/conta?bemvindo=1" : "/conta", req.url),
+      new URL(isNew ? "/conta?bemvindo=1" : "/conta", base),
     );
     res.cookies.delete("glc_oauth_state");
     return res;

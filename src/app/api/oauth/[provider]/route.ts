@@ -9,8 +9,9 @@ export async function GET(
   { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await params;
+  const base = process.env.SITE_URL ?? req.url;
   if ((provider !== "google" && provider !== "discord") || !isProviderEnabled(provider as OAuthProvider)) {
-    return NextResponse.redirect(new URL("/entrar?erro=Login social indisponível.", req.url));
+    return NextResponse.redirect(new URL("/entrar?erro=Login social indisponível.", base));
   }
 
   const state = newOAuthState();
