@@ -1397,6 +1397,26 @@ button:disabled {
   }
 }
 
+/* formulários de edição de entidades no admin */
+.admin-entity-form {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.admin-entity-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  min-width: 0;
+}
+.admin-entity-form input[type="text"] {
+  min-width: 130px;
+}
+
 .store-top-type {
   display: flex;
   align-items: center;
@@ -1521,6 +1541,45 @@ button:disabled {
   font-size: 1.15rem;
   padding-right: 2rem;
 }
+.deck-view-card.as-button {
+  padding: 0;
+  border: none;
+  background: none;
+  box-shadow: none;
+  cursor: pointer;
+}
+.deck-view-card.as-button:hover,
+.deck-view-card.as-button:focus-visible {
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+.deck-view-card.as-button img {
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
+}
+.deck-view-card.as-button:hover img {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.55);
+}
+.card-attack {
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--border);
+}
+.card-attack:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.card-attack p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+.attack-cost {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  flex: none;
+}
+
 .ban-modal-close {
   position: absolute;
   top: 0.6rem;
@@ -1739,6 +1798,83 @@ button:disabled {
 }
 .player-hero h1 {
   margin: 0;
+}
+
+/* header do deck: arte da carta-capa como fundo (recorte CSS da faixa de
+   ilustração — cover num painel largo mostra só a banda horizontal da arte,
+   sem a moldura da carta) */
+.deck-hero-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 22%;
+  opacity: 0.17;
+  filter: saturate(1.2);
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.75) 55%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(0, 0, 0, 0.75) 55%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+}
+:root[data-theme="light"] .deck-hero-art {
+  opacity: 0.13;
+}
+.deck-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* vitórias do deck agrupadas por loja */
+.deck-wins {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+.deck-win-group {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 32%, transparent);
+  font-size: 0.86rem;
+}
+.deck-win-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+.deck-win-head .tnum {
+  font-size: 1rem;
+}
+.deck-win-dates {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.date-chip {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  border-radius: 7px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.5;
 }
 .avatar {
   width: 56px;

@@ -67,6 +67,8 @@ export default async function AdminPage() {
       <p>
         <Link href="/admin/issues">Divergências e conflitos</Link> ·{" "}
         <Link href="/admin/aliases">Jogadores, lojas e aliases</Link> ·{" "}
+        <Link href="/admin/lojas">Editar lojas/eventos</Link> ·{" "}
+        <Link href="/admin/usuarios">Usuários</Link> ·{" "}
         <Link href="/admin/tabs">Abas da planilha</Link> ·{" "}
         <Link href="/admin/contas">Contas e banlist</Link>
       </p>

@@ -2,16 +2,26 @@ import { requireAdmin } from "@/lib/adminAuth";
 import { prisma } from "@/lib/db";
 import {
   addPlayerAliasAction,
+  deletePlayerAction,
   mergePlayersAction,
   mergeVenuesAction,
+  renamePlayerAction,
   updateVenueAction,
 } from "../actions";
 
 export const metadata = { title: "Admin — aliases", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-export default async function AliasesPage() {
+export default async function AliasesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await requireAdmin();
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const ok = one(sp.ok);
+  const erro = one(sp.erro);
 
   const [players, venues] = await Promise.all([
     prisma.player.findMany({
@@ -31,6 +41,9 @@ export default async function AliasesPage() {
         Nomes variam entre abas da planilha ("João Victor Soares" vs "JV Soares"). Aliases mapeiam
         variações para o nome canônico; o merge junta registros duplicados.
       </p>
+
+      {ok && <p className="form-msg ok">{ok}</p>}
+      {erro && <p className="form-msg err">{erro}</p>}
 
       <h2>Adicionar alias de jogador</h2>
       <form action={addPlayerAliasAction} className="filter-bar">
@@ -81,18 +94,39 @@ export default async function AliasesPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Nome canônico</th>
+              <th>Nome canônico (edite e salve para renomear)</th>
               <th className="num">Insígnias</th>
               <th>Aliases</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {players.map((p) => (
               <tr key={p.id}>
-                <td>{p.name}</td>
+                <td>
+                  <form action={renamePlayerAction} style={{ display: "flex", gap: 4 }}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <input type="text" name="name" defaultValue={p.name} required maxLength={80} />
+                    <button className="secondary small">Salvar</button>
+                  </form>
+                </td>
                 <td className="num">{p._count.badges}</td>
                 <td className="muted" style={{ whiteSpace: "normal" }}>
                   {p.aliases.map((a) => a.alias).join(", ")}
+                </td>
+                <td>
+                  {p._count.badges === 0 ? (
+                    <form action={deletePlayerAction}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <button className="danger small" type="submit">
+                        Excluir
+                      </button>
+                    </form>
+                  ) : (
+                    <span className="muted small" title="Tem vitórias — use o merge">
+                      🔒 merge
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

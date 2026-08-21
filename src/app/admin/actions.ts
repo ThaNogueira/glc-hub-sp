@@ -1,6 +1,6 @@
 "use server";
 
-import type { IssueStatus, TabKind, VenueKind, VenueStatus } from "@prisma/client";
+import type { IssueStatus, Role, TabKind, VenueKind, VenueStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAdmin, loginAdmin, logoutAdmin } from "@/lib/adminAuth";
@@ -231,6 +231,191 @@ export async function removeBanlistAction(formData: FormData) {
   const { invalidateBanlistCache } = await import("@/lib/cards/search");
   invalidateBanlistCache();
   revalidatePath("/admin/contas");
+}
+
+// ---------------------------------------------------------------------------
+// Gestão de entidades: lojas/eventos, jogadores e usuários (edição no front)
+// ---------------------------------------------------------------------------
+
+/** Edita os dados de uma loja/evento (nome, bairro, endereço, tipo, status). */
+export async function updateVenueDetailsAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const neighborhood = String(formData.get("neighborhood") ?? "").trim();
+  const address = String(formData.get("address") ?? "").trim();
+  const kind = String(formData.get("kind")) as VenueKind;
+  const status = String(formData.get("status")) as VenueStatus;
+  if (!id || !name || !["STORE", "EVENT"].includes(kind) || !["ACTIVE", "HIATUS"].includes(status))
+    redirect("/admin/lojas?erro=Dados inválidos.");
+
+  const venue = await prisma.venue.findUnique({ where: { id } });
+  if (!venue) redirect("/admin/lojas?erro=Loja não encontrada.");
+
+  try {
+    await prisma.venue.update({
+      where: { id },
+      data: { name, neighborhood: neighborhood || null, address: address || null, kind, status },
+    });
+  } catch {
+    redirect(`/admin/lojas?erro=Já existe uma loja chamada "${name}".`);
+  }
+
+  // o nome antigo e o novo viram aliases (o sync continua reconhecendo os dois)
+  for (const alias of [venue.name, name]) {
+    await prisma.venueAlias.upsert({
+      where: { normalized: fold(alias) },
+      create: { alias, normalized: fold(alias), venueId: id },
+      update: { venueId: id },
+    });
+  }
+
+  revalidatePath("/admin/lojas");
+  revalidatePath("/lojas");
+  revalidatePath("/agenda");
+  redirect(`/admin/lojas?ok=Loja "${name}" atualizada.`);
+}
+
+/** Exclui uma loja/evento sem resultados (com resultados, use o merge). */
+export async function deleteVenueAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const venue = await prisma.venue.findUnique({
+    where: { id },
+    include: { _count: { select: { badges: true } }, user: { select: { id: true } } },
+  });
+  if (!venue) redirect("/admin/lojas?erro=Loja não encontrada.");
+  if (venue._count.badges > 0)
+    redirect(
+      `/admin/lojas?erro="${venue.name}" tem ${venue._count.badges} resultados — use o merge em Aliases para juntá-la a outra loja.`,
+    );
+
+  // conta de loja vinculada volta a ser jogador comum
+  if (venue.user) {
+    await prisma.user.update({
+      where: { id: venue.user.id },
+      data: { venueId: null, role: "PLAYER" },
+    });
+  }
+  await prisma.venue.delete({ where: { id } });
+  revalidatePath("/admin/lojas");
+  revalidatePath("/lojas");
+  redirect(`/admin/lojas?ok=Loja "${venue.name}" excluída.`);
+}
+
+/** Renomeia um jogador (o nome antigo vira alias). */
+export async function renamePlayerAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").replace(/\s+/g, " ").trim();
+  if (!id || !name) redirect("/admin/aliases?erro=Nome inválido.");
+
+  const player = await prisma.player.findUnique({ where: { id } });
+  if (!player) redirect("/admin/aliases?erro=Jogador não encontrado.");
+  if (player.name === name) redirect("/admin/aliases");
+
+  try {
+    await prisma.player.update({ where: { id }, data: { name } });
+  } catch {
+    redirect(
+      `/admin/aliases?erro=Já existe "${name}" — se for a mesma pessoa, use o merge.`,
+    );
+  }
+  for (const alias of [player.name, name]) {
+    await prisma.playerAlias.upsert({
+      where: { normalized: fold(alias) },
+      create: { alias, normalized: fold(alias), playerId: id },
+      update: { playerId: id },
+    });
+  }
+  revalidatePath("/admin/aliases");
+  revalidatePath("/jogadores");
+  redirect(`/admin/aliases?ok=Renomeado para "${name}".`);
+}
+
+/** Exclui um jogador sem resultados (com resultados, use o merge). */
+export async function deletePlayerAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const player = await prisma.player.findUnique({
+    where: { id },
+    include: { _count: { select: { badges: true } }, user: { select: { id: true } } },
+  });
+  if (!player) redirect("/admin/aliases?erro=Jogador não encontrado.");
+  if (player._count.badges > 0)
+    redirect(
+      `/admin/aliases?erro="${player.name}" tem ${player._count.badges} vitórias — use o merge.`,
+    );
+  if (player.user) {
+    await prisma.user.update({ where: { id: player.user.id }, data: { playerId: null } });
+  }
+  await prisma.player.delete({ where: { id } });
+  revalidatePath("/admin/aliases");
+  revalidatePath("/jogadores");
+  redirect(`/admin/aliases?ok=Jogador "${player.name}" excluído.`);
+}
+
+/** Edita um usuário: papel e vínculos com jogador (por nome) e loja. */
+export async function updateUserAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  const role = String(formData.get("role")) as Role;
+  const playerName = String(formData.get("playerName") ?? "").trim();
+  const venueId = String(formData.get("venueId") ?? "");
+  if (!id || !["PLAYER", "STORE", "ADMIN"].includes(role))
+    redirect("/admin/usuarios?erro=Dados inválidos.");
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) redirect("/admin/usuarios?erro=Usuário não encontrado.");
+
+  // jogador: vazio desvincula; nome resolve por canônico ou alias
+  let playerId: string | null = null;
+  if (playerName) {
+    const player = await prisma.player.findFirst({
+      where: {
+        OR: [
+          { name: { equals: playerName, mode: "insensitive" } },
+          { aliases: { some: { normalized: fold(playerName) } } },
+        ],
+      },
+      include: { user: { select: { id: true } } },
+    });
+    if (!player)
+      redirect(`/admin/usuarios?erro=Jogador "${playerName}" não encontrado — confira o nome.`);
+    if (player.user && player.user.id !== id)
+      redirect(`/admin/usuarios?erro=O perfil "${player.name}" já pertence a outra conta.`);
+    playerId = player.id;
+  }
+
+  // loja: vazio desvincula; ocupada por outra conta é bloqueada
+  if (venueId) {
+    const taken = await prisma.user.findFirst({
+      where: { venueId, id: { not: id } },
+      select: { email: true },
+    });
+    if (taken)
+      redirect(`/admin/usuarios?erro=Essa loja já é administrada por ${taken.email}.`);
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: { role, playerId, venueId: venueId || null },
+  });
+  revalidatePath("/admin/usuarios");
+  redirect(`/admin/usuarios?ok=Usuário ${user.email} atualizado.`);
+}
+
+/** Exclui uma conta de usuário (decks publicados ficam, sem autor). */
+export async function deleteUserAction(formData: FormData) {
+  await guard();
+  const id = String(formData.get("id") ?? "");
+  if (String(formData.get("confirm")) !== "on")
+    redirect("/admin/usuarios?erro=Marque a caixa de confirmação para excluir.");
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) redirect("/admin/usuarios?erro=Usuário não encontrado.");
+  await prisma.user.delete({ where: { id } });
+  revalidatePath("/admin/usuarios");
+  redirect(`/admin/usuarios?ok=Conta ${user.email} excluída.`);
 }
 
 export async function importCardsAction() {

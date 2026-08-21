@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/CopyButton";
+import { DeckCardsView, type CardView } from "@/components/DeckCardsView";
 import { TypeBadge } from "@/components/TypeBadge";
 import { getSessionUser } from "@/lib/auth";
 import { getBanlist } from "@/lib/cards/search";
@@ -93,13 +94,40 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
         })
       : [];
 
+  // arte de fundo do header: recorte CSS da faixa de ilustração da carta-capa
+  const heroArt =
+    deck.coverCard?.imageLarge ??
+    deck.coverCard?.imageSmall ??
+    version.cards[0]?.card?.imageLarge ??
+    version.cards[0]?.card?.imageSmall ??
+    null;
+
+  // vitórias agrupadas por loja: "3 insígnias na TamerShop" + datas em chips
+  const winsByVenue = new Map<string, { venue: string; dates: (Date | null)[] }>();
+  for (const l of deck.resultLinks) {
+    const g = winsByVenue.get(l.badgeWin.venue.name) ?? {
+      venue: l.badgeWin.venue.name,
+      dates: [],
+    };
+    g.dates.push(l.badgeWin.date);
+    winsByVenue.set(l.badgeWin.venue.name, g);
+  }
+  const winGroups = [...winsByVenue.values()].sort((a, b) => b.dates.length - a.dates.length);
+
   return (
     <>
       <div
-        className="player-hero"
+        className="player-hero deck-hero"
         style={{ ["--hero-color" as string]: `var(${t.cssVar})` }}
       >
-        <div className="flex-between" style={{ alignItems: "start" }}>
+        {heroArt && (
+          <div
+            className="deck-hero-art"
+            style={{ backgroundImage: `url(${heroArt})` }}
+            aria-hidden="true"
+          />
+        )}
+        <div className="flex-between deck-hero-content" style={{ alignItems: "flex-start" }}>
           <div className="flex-row" style={{ gap: "1rem", alignItems: "start" }}>
             {(deck.coverCard?.imageSmall ?? null) && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -130,15 +158,26 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
                 {deck.updatedAt.toLocaleDateString("pt-BR")}
                 {version.version > 1 && ` · v${version.version}`}
               </p>
-              {deck.resultLinks.length > 0 && (
-                <p className="small" style={{ marginTop: "0.4rem" }}>
-                  {deck.resultLinks.map((l) => (
-                    <span key={l.id} className="chip ok" style={{ marginRight: 6 }}>
-                      🏆 ganhou a insígnia de {t.pt} na {l.badgeWin.venue.name}
-                      {l.badgeWin.date ? ` em ${formatBrDate(l.badgeWin.date)}` : ""}
-                    </span>
+              {winGroups.length > 0 && (
+                <div className="deck-wins">
+                  {winGroups.map((g) => (
+                    <div key={g.venue} className="deck-win-group">
+                      <span className="deck-win-head">
+                        <span aria-hidden="true">🏆</span>
+                        <strong className="tnum">{g.dates.length}</strong>{" "}
+                        {g.dates.length === 1 ? "insígnia" : "insígnias"} de {t.pt} na{" "}
+                        <strong>{g.venue}</strong>
+                      </span>
+                      <span className="deck-win-dates">
+                        {g.dates.map((d, i) => (
+                          <span key={i} className="date-chip tnum">
+                            {d ? formatBrDate(d) : "s/ data"}
+                          </span>
+                        ))}
+                      </span>
+                    </div>
                   ))}
-                </p>
+                </div>
               )}
             </div>
           </div>
@@ -153,34 +192,38 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
         </div>
       </div>
 
-      {(["POKEMON", "TRAINER", "ENERGY"] as const).map((cat) => {
-        // mantém a ordem manual definida no builder (position)
-        const items = version.cards.filter((dc) => dc.category === cat);
-        if (items.length === 0) return null;
-        return (
-          <section key={cat}>
-            <h2>
-              {CATEGORY_LABEL[cat]}{" "}
-              <span className="muted tnum small">
-                {items.reduce((a, i) => a + i.quantity, 0)}
-              </span>
-            </h2>
-            <div className="deck-view-grid">
-              {items.map((dc) => (
-                <div key={dc.id} className="deck-view-card" title={`${dc.quantity}× ${dc.rawName}`}>
-                  {dc.card?.imageSmall ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={dc.card.imageSmall} alt={dc.rawName} loading="lazy" decoding="async" />
-                  ) : (
-                    <span className="deck-view-fallback">{dc.rawName}</span>
-                  )}
-                  {dc.quantity > 1 && <span className="qty-badge tnum">×{dc.quantity}</span>}
-                </div>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      <DeckCardsView
+        groups={(["POKEMON", "TRAINER", "ENERGY"] as const).map((cat) => ({
+          key: cat,
+          label: CATEGORY_LABEL[cat],
+          // mantém a ordem manual definida no builder (position)
+          items: version.cards
+            .filter((dc) => dc.category === cat)
+            .map((dc) => ({
+              rawName: dc.rawName,
+              quantity: dc.quantity,
+              card: dc.card
+                ? {
+                    id: dc.card.id,
+                    name: dc.card.name,
+                    namePt: dc.card.namePt,
+                    imageSmall: dc.card.imageSmall,
+                    imageLarge: dc.card.imageLarge,
+                    setName: dc.card.setName,
+                    setPtcgoCode: dc.card.setPtcgoCode,
+                    number: dc.card.number,
+                    rarity: dc.card.rarity,
+                    supertype: dc.card.supertype,
+                    subtypes: dc.card.subtypes,
+                    types: dc.card.types,
+                    hp: dc.card.hp,
+                    attacks: (dc.card.attacks as CardView["attacks"]) ?? null,
+                    rules: dc.card.rules,
+                  }
+                : null,
+            })),
+        }))}
+      />
 
       {deck.guide && (
         <>
