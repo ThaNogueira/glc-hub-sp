@@ -18,6 +18,7 @@ import {
   saveDeckAction,
   type SaveDeckPayload,
 } from "@/app/decks/actions";
+import type { UnresolvedLine } from "@/lib/decks/parse";
 
 export type BuilderInitial = {
   deckId?: string;
@@ -98,6 +99,8 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
   const [importText, setImportText] = useState("");
   const [importUrl, setImportUrl] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  // linhas da importação que não bateram com nenhuma carta — o usuário resolve
+  const [problems, setProblems] = useState<(UnresolvedLine & { choice: string })[]>([]);
   const [importing, startImporting] = useTransition();
   const [copied, setCopied] = useState(false);
 
@@ -220,21 +223,52 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
   }
 
   // ---------------------------------------------------------------- import/export
-  function mergeImported(imported: { card: GlcCard; quantity: number }[], unresolved: string[]) {
-    if (imported.length === 0) {
+  function mergeImported(
+    imported: { card: GlcCard; quantity: number }[],
+    unresolved: UnresolvedLine[],
+  ) {
+    if (imported.length === 0 && unresolved.length === 0) {
       setImportMsg("Nenhuma carta reconhecida.");
       return;
     }
     if (entries.length > 0 && !window.confirm("Substituir a lista atual pela importada?")) return;
     setEntries(imported);
     setCoverCardId(null);
+    setProblems(
+      unresolved.map((u) => ({ ...u, choice: u.suggestions[0]?.id ?? "" })),
+    );
     setImportMsg(
       unresolved.length > 0
-        ? `Importado com ${unresolved.length} linha(s) não reconhecida(s):\n${unresolved.slice(0, 8).join("\n")}`
+        ? `Lista importada com ${unresolved.length} pendência(s) — resolva abaixo em "Cartas não reconhecidas".`
         : `Lista importada: ${imported.reduce((a, e) => a + e.quantity, 0)} cartas.`,
     );
     setShowImport(false);
     setTab("deck");
+  }
+
+  /** Aplica a escolha do usuário para uma linha não reconhecida. */
+  function resolveProblem(index: number) {
+    const p = problems[index];
+    const card = p?.suggestions.find((s) => s.id === p.choice);
+    if (!card) return;
+    if (card.isBasicEnergy) {
+      setEntries((prev) => {
+        const i = prev.findIndex((e) => e.card.id === card.id);
+        if (i >= 0) {
+          const next = [...prev];
+          next[i] = { ...next[i], quantity: next[i].quantity + p.quantity };
+          return next;
+        }
+        return [...prev, { card, quantity: p.quantity }];
+      });
+    } else {
+      setEntries((prev) =>
+        prev.some((e) => e.card.name.toLowerCase() === card.name.toLowerCase())
+          ? prev // singleton: já entrou por outra linha
+          : [...prev, { card, quantity: 1 }],
+      );
+    }
+    setProblems((prev) => prev.filter((_, i) => i !== index));
   }
 
   function doImportText() {
@@ -663,6 +697,75 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
             <p className="form-msg ok small" style={{ whiteSpace: "pre-line" }}>
               {importMsg}
             </p>
+          )}
+
+          {/* pendências da importação: usuário escolhe a carta certa */}
+          {problems.length > 0 && (
+            <div className="panel problem-panel" style={{ marginTop: 0 }}>
+              <h4 style={{ margin: "0 0 0.5rem" }}>
+                ⚠️ Cartas não reconhecidas ({problems.length})
+              </h4>
+              <p className="small muted" style={{ marginTop: 0 }}>
+                Não achei essas linhas nem pelo código de coleção nem pelo nome. Escolha a carta
+                certa{validation.deckType ? ` (candidatas do tipo ${TYPE_BY_ID[validation.deckType].pt} primeiro)` : ""}{" "}
+                ou descarte a linha.
+              </p>
+              {problems.map((p, idx) => {
+                // Pokémon do tipo do deck primeiro; se o filtro zerar, mostra todas
+                const dt = validation.deckType;
+                const typed =
+                  dt !== null
+                    ? p.suggestions.filter(
+                        (s) => s.supertype !== "Pokémon" || s.types.includes(TYPE_BY_ID[dt].en),
+                      )
+                    : p.suggestions;
+                const options = typed.length > 0 ? typed : p.suggestions;
+                return (
+                  <div key={`${p.line}-${idx}`} className="problem-row">
+                    <span className="small" style={{ flex: "1 1 160px", minWidth: 0 }}>
+                      <strong className="tnum">{p.quantity}×</strong>{" "}
+                      <span className="mono">{p.line}</span>
+                    </span>
+                    {options.length > 0 ? (
+                      <>
+                        <select
+                          value={p.choice}
+                          onChange={(e) =>
+                            setProblems((prev) =>
+                              prev.map((x, i) => (i === idx ? { ...x, choice: e.target.value } : x)),
+                            )
+                          }
+                          aria-label={`Carta para "${p.line}"`}
+                          style={{ maxWidth: 260 }}
+                        >
+                          {options.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.namePt ?? s.name} · {s.setPtcgoCode ?? s.setName} {s.number}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="button" className="small" onClick={() => resolveProblem(idx)}>
+                          Adicionar
+                        </button>
+                      </>
+                    ) : (
+                      <span className="small muted">
+                        nenhuma candidata — busque manualmente na coluna de busca
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="ghost small"
+                      onClick={() => setProblems((prev) => prev.filter((_, i) => i !== idx))}
+                      aria-label="Descartar linha"
+                      title="Descartar linha"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
 
           {showExport && (

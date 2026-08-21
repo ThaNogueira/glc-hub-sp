@@ -1421,6 +1421,25 @@ button:disabled {
   width: 100%;
 }
 
+/* pendências de importação do deck builder */
+.problem-panel {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.problem-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--border);
+}
+.problem-row:first-of-type {
+  border-top: none;
+}
+.problem-row .mono {
+  overflow-wrap: anywhere;
+}
+
 /* ---------- upvotes e home ---------- */
 
 .vote-btn {

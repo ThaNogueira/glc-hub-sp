@@ -26,7 +26,9 @@ const TCGDEX_EN_URL = "https://api.tcgdex.net/v2/en/cards";
 const TCGDEX_PT_URL = "https://api.tcgdex.net/v2/pt/cards";
 
 // Início do card pool do GLC: Black & White (25/04/2011)
-const GLC_POOL_START = "2011/04/25";
+// (01/03/2011 = data dos BW Black Star Promos — Tropical Beach é legal;
+// Call of Legends, 09/02/2011, era HGSS, fica de fora)
+const GLC_POOL_START = "2011/03/01";
 
 // Subtypes que caracterizam Rule Box (proibidos no GLC).
 // BREAK fica de fora de propósito: não tem Rule Box e é legal no formato.

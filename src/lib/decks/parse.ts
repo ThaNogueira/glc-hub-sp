@@ -34,21 +34,46 @@ export function cardToGlc(card: Card, banlist: BanMatcher): GlcCard {
   };
 }
 
+/** Linha que o parser não resolveu, com candidatas para o usuário escolher. */
+export type UnresolvedLine = {
+  line: string;
+  name: string;
+  quantity: number;
+  suggestions: GlcCard[];
+};
+
 export type ParsedDeck = {
   entries: { card: GlcCard; quantity: number }[];
-  unresolved: string[]; // linhas que não foram reconhecidas
+  unresolved: UnresolvedLine[];
 };
 
 // "4 Rare Candy SVI 191" | "1 Snorlax" | "* 2 Ultra Ball PLB 90"
+// (com sufixo opcional PH/RH do TCG Live: "1 Kirlia SIT 68 PH")
+// número aceita prefixo de letras ("BW28", "SWSH003", "GG01", "SV025", "TG12")
 const LINE_RE =
-  /^(?:\*\s*)?(\d+)\s*[x×]?\s+(.+?)(?:\s+([A-Z][A-Z0-9]{1,4}(?:-[A-Z]+)?)\s+([A-Za-z]?\d+[a-zA-Z]?))?\s*$/;
+  /^(?:\*\s*)?(\d+)\s*[x×]?\s+(.+?)(?:\s+([A-Z][A-Z0-9]{1,4}(?:-[A-Z]+)?)\s+([A-Za-z]{0,4}\d+[a-zA-Z]*))?(?:\s+(?:PH|RH))?\s*$/;
 
 const HEADER_RE = /^(pok[eé]mon|trainer|treinador(?:es)?|energy|energia)s?\s*[:(-]?\s*\d*\s*\)?$/i;
 
-export async function parseDeckText(text: string): Promise<ParsedDeck> {
+/** Remove ruído do TCG Live: tokens "{W}", sufixo PH/RH, espaços duplos. */
+function cleanCardName(raw: string): string {
+  return raw
+    .replace(/\{[A-Z*+]\}/gi, " ")
+    .replace(/\s+(?:PH|RH)$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const BASIC_ENERGY_RE =
+  /^(?:basic\s+)?(grass|water|fire|lightning|psychic|fighting|darkness|metal|fairy)\s+energy$/i;
+
+export async function parseDeckText(
+  text: string,
+  opts: { suggest?: boolean } = {},
+): Promise<ParsedDeck> {
   const banlist = await getBanlist();
   const byName = new Map<string, { card: GlcCard; quantity: number }>();
-  const unresolved: string[] = [];
+  const unresolved: UnresolvedLine[] = [];
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -56,14 +81,15 @@ export async function parseDeckText(text: string): Promise<ParsedDeck> {
 
     const m = line.match(LINE_RE);
     if (!m) {
-      unresolved.push(line);
+      unresolved.push({ line, name: cleanCardName(line), quantity: 1, suggestions: [] });
       continue;
     }
     const quantity = Number(m[1]);
-    const name = m[2].trim();
+    const name = cleanCardName(m[2]);
     const setCode = m[3];
     const number = m[4];
 
+    // 1º: código de coleção; 2º: nome exato (EN/PT); depois variações
     let card: Card | null = null;
     if (setCode && number) {
       card = await findByPtcgoCode(setCode, number);
@@ -75,10 +101,22 @@ export async function parseDeckText(text: string): Promise<ParsedDeck> {
     if (!card) card = await findByName(name);
     // "Basic Fire Energy" ↔ "Fire Energy" (grafias variam entre exportadores)
     if (!card && /^basic\s+/i.test(name)) card = await findByName(name.replace(/^basic\s+/i, ""));
-    if (!card && /energy$/i.test(name)) card = await findByName(`Basic ${name}`);
+    if (!card && /energ(y|ia)/i.test(name)) card = await findByName(`Basic ${name}`);
+    // energia básica sem match exato (código estranho, arte de promo etc.):
+    // usa a arte padrão mais recente daquela energia
+    if (!card) {
+      const be = name.match(BASIC_ENERGY_RE);
+      if (be) card = await findByName(`${be[1]} Energy`);
+    }
 
     if (!card) {
-      unresolved.push(line);
+      // nada bateu — busca fuzzy vira lista de candidatas pro usuário escolher
+      let suggestions: GlcCard[] = [];
+      if (opts.suggest !== false && name.length >= 2) {
+        const { searchCards } = await import("../cards/search");
+        suggestions = (await searchCards({ q: name, limit: 18 })).filter((s) => !s.banned);
+      }
+      unresolved.push({ line, name, quantity, suggestions });
       continue;
     }
 
@@ -128,7 +166,8 @@ export async function parseDeckUrl(url: string): Promise<ParsedDeck & { error?: 
       .replace(/&#39;|&apos;/g, "'")
       .replace(/&quot;/g, '"');
 
-    const result = await parseDeckText(text);
+    // sem sugestões aqui: o texto da página tem muito ruído que não é carta
+    const result = await parseDeckText(text, { suggest: false });
     const totalCards = result.entries.reduce((a, e) => a + e.quantity, 0);
     if (result.entries.length < 5 || totalCards < 20) {
       return {
