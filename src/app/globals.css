@@ -1397,6 +1397,72 @@ button:disabled {
   }
 }
 
+/* ---------- painel admin ---------- */
+
+.admin-nav {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0.25rem;
+  padding: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.admin-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--r-md);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: color var(--t-fast), background var(--t-fast);
+}
+.admin-tab:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+.admin-tab.active {
+  color: var(--accent-text);
+  background: var(--accent);
+}
+.admin-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--err);
+  color: #fff;
+  line-height: 1;
+}
+.admin-tab.active .admin-badge {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.9rem;
+}
+.admin-card h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.02rem;
+}
+.admin-card p {
+  margin: 0;
+}
+.admin-card-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
 /* formulários de edição de entidades no admin */
 .admin-entity-form {
   display: flex;
