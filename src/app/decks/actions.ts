@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { PokemonType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { getBanlistNormalized } from "@/lib/cards/search";
+import { getBanlist } from "@/lib/cards/search";
 import { cardToGlc, parseDeckText, parseDeckUrl, type ParsedDeck } from "@/lib/decks/parse";
 import { categoryOf, validateDeck, type DeckEntry } from "@/lib/glc";
 import { slugify } from "@/lib/normalize";
@@ -77,7 +77,7 @@ export async function saveDeckAction(payloadJson: string): Promise<{ error?: str
   const cards = await prisma.card.findMany({ where: { id: { in: [...wanted.keys()] } } });
   if (cards.length !== wanted.size) return { error: "Alguma carta não foi encontrada na base." };
 
-  const banlist = await getBanlistNormalized();
+  const banlist = await getBanlist();
   const cardById = new Map(cards.map((c) => [c.id, c]));
   // preserva a ordem manual definida no builder (vira `position` no banco)
   const entries: DeckEntry[] = [...wanted.keys()].map((id) => ({

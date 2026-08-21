@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { DeckBuilder } from "@/components/DeckBuilder";
 import { getSessionUser } from "@/lib/auth";
-import { getBanlistNormalized } from "@/lib/cards/search";
+import { getBanlist } from "@/lib/cards/search";
 import { cardToGlc } from "@/lib/decks/parse";
 import { getSetOptions } from "@/lib/decks/sets";
 import { prisma } from "@/lib/db";
@@ -26,7 +26,7 @@ export default async function EditDeckPage({ params }: { params: Promise<{ slug:
   if (!deck || deck.authorUserId !== user.id) notFound();
 
   const version = deck.versions[0];
-  const banlist = await getBanlistNormalized();
+  const banlist = await getBanlist();
   const entries = (version?.cards ?? [])
     .filter((dc) => dc.card)
     .map((dc) => ({ card: cardToGlc(dc.card!, banlist), quantity: dc.quantity }));

@@ -54,6 +54,12 @@ const I = {
       <path d="M5 12v9h14v-9M9 21v-6h6v6" />
     </svg>
   ),
+  ban: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M5.5 5.5l13 13" />
+    </svg>
+  ),
   book: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z" />
@@ -74,6 +80,7 @@ const NAV: NavItem[] = [
   { href: "/decks", label: "Decks", icon: I.cards },
   { href: "/jogadores", label: "Jogadores", icon: I.users },
   { href: "/lojas", label: "Lojas", icon: I.store },
+  { href: "/banlist", label: "Banlist", icon: I.ban },
   { href: "/regras", label: "Regras", icon: I.book },
 ];
 

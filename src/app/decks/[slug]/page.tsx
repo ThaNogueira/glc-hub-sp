@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/CopyButton";
 import { TypeBadge } from "@/components/TypeBadge";
 import { getSessionUser } from "@/lib/auth";
-import { getBanlistNormalized } from "@/lib/cards/search";
+import { getBanlist } from "@/lib/cards/search";
 import { cardToGlc } from "@/lib/decks/parse";
 import { prisma } from "@/lib/db";
 import { exportDeckText, type DeckEntry } from "@/lib/glc";
@@ -68,7 +68,7 @@ export default async function DeckPage({ params }: { params: Promise<{ slug: str
   const version = deck.versions[0];
   if (!version) notFound();
 
-  const banlist = await getBanlistNormalized();
+  const banlist = await getBanlist();
   const entries: DeckEntry[] = version.cards
     .filter((dc) => dc.card)
     .map((dc) => ({ card: cardToGlc(dc.card!, banlist), quantity: dc.quantity }));

@@ -8,13 +8,29 @@ export const metadata = {
 };
 
 export default async function StoresPage() {
-  const venues = await prisma.venue.findMany({
-    include: {
-      _count: { select: { badges: { where: { status: "ACTIVE" } } } },
-      slots: true,
-    },
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-  });
+  const [venues, typeCounts] = await Promise.all([
+    prisma.venue.findMany({
+      include: {
+        _count: { select: { badges: { where: { status: "ACTIVE" } } } },
+        slots: true,
+      },
+      orderBy: [{ status: "asc" }, { name: "asc" }],
+    }),
+    prisma.badgeWin.groupBy({
+      by: ["venueId", "type"],
+      where: { status: "ACTIVE" },
+      _count: { _all: true },
+    }),
+  ]);
+
+  // tipo com mais vitórias em cada loja
+  const topByVenue = new Map<string, { type: (typeof typeCounts)[number]["type"]; wins: number }>();
+  for (const tc of typeCounts) {
+    const cur = topByVenue.get(tc.venueId);
+    if (!cur || tc._count._all > cur.wins) {
+      topByVenue.set(tc.venueId, { type: tc.type, wins: tc._count._all });
+    }
+  }
 
   const stores = venues.filter((v) => v.kind === "STORE");
   const events = venues.filter((v) => v.kind === "EVENT");
@@ -36,6 +52,8 @@ export default async function StoresPage() {
                 status: v.status,
                 badgeCount: v._count.badges,
                 slots: v.slots.map((s) => ({ weekday: s.weekday, time: s.time })),
+                topType: topByVenue.get(v.id)?.type ?? null,
+                topTypeWins: topByVenue.get(v.id)?.wins ?? 0,
               }}
             />
           </Reveal>
@@ -57,6 +75,8 @@ export default async function StoresPage() {
                   status: v.status,
                   badgeCount: v._count.badges,
                   slots: [],
+                  topType: topByVenue.get(v.id)?.type ?? null,
+                  topTypeWins: topByVenue.get(v.id)?.wins ?? 0,
                 }}
               />
             ))}

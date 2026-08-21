@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TypeBadge } from "@/components/TypeBadge";
+import { TypeIcon } from "@/components/TypeIcon";
 import { EmptyState } from "@/components/EmptyState";
 import { prisma } from "@/lib/db";
 import { getRankings } from "@/lib/queries";
 import { formatBrDate } from "@/lib/normalize";
-import { WEEKDAYS_PT } from "@/lib/types";
+import { TYPE_BY_ID, WEEKDAYS_PT } from "@/lib/types";
 
 export async function generateMetadata({
   params,
@@ -33,7 +34,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   });
   if (!venue) notFound();
 
-  const [ranking, recent] = await Promise.all([
+  const [ranking, recent, typeCounts] = await Promise.all([
     getRankings({ venue: venue.slug }),
     prisma.badgeWin.findMany({
       where: { venueId: venue.id, status: "ACTIVE" },
@@ -41,7 +42,16 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
       orderBy: [{ date: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       take: 30,
     }),
+    prisma.badgeWin.groupBy({
+      by: ["type"],
+      where: { venueId: venue.id, status: "ACTIVE" },
+      _count: { _all: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 1,
+    }),
   ]);
+
+  const topType = typeCounts[0] ? TYPE_BY_ID[typeCounts[0].type] : null;
 
   return (
     <>
@@ -73,6 +83,17 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
             {venue.slots
               .map((s) => `${WEEKDAYS_PT[s.weekday - 1]} ${s.time ?? ""}`.trim())
               .join(" · ")}
+          </p>
+        )}
+
+        {topType && (
+          <p
+            className="store-top-type"
+            style={{ marginBottom: 0, ["--tt-color" as string]: `var(${topType.cssVar})` }}
+          >
+            <TypeIcon type={topType.id} size={18} />
+            <strong>Tipo mais forte da loja:</strong> {topType.pt}{" "}
+            <span className="muted tnum">({typeCounts[0]._count._all} vitórias)</span>
           </p>
         )}
       </div>

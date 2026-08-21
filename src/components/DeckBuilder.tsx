@@ -366,6 +366,23 @@ export function DeckBuilder({ initial, sets }: { initial: BuilderInitial; sets: 
           </div>
         </div>
         <div style={{ display: "grid", gap: "0.4rem", minWidth: 200 }}>
+          {entries.length > 0 && (
+            <label className="field" style={{ gap: "0.15rem" }}>
+              <span className="small muted">Imagem do deck (carta-capa)</span>
+              <select
+                value={coverCardId ?? ""}
+                onChange={(e) => setCoverCardId(e.target.value || null)}
+                aria-label="Carta-capa do deck"
+              >
+                <option value="">automática (1ª carta)</option>
+                {entries.map((e) => (
+                  <option key={e.card.id} value={e.card.id}>
+                    {displayName(e.card)} ({e.card.setPtcgoCode ?? e.card.setName} {e.card.number})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {initial.deckId && (
             <input
               type="text"

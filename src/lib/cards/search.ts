@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { fold } from "../normalize";
+import { buildOfficialMatcher, isCardBanned, type BanMatcher } from "../banlistOficial";
 
 /**
  * Busca local de cartas para o deck builder: prefixo (btree) + fuzzy
@@ -33,14 +34,22 @@ export type CardHit = {
   banned: boolean;
 };
 
-// cache leve da banlist (editável no admin) — evita um hit por tecla digitada
-let banlistCache: { at: number; names: Set<string> } | null = null;
+// cache leve da banlist — evita um hit por tecla digitada.
+// Matcher = banlist oficial (em código, com bans por impressão específica)
+// + entradas extras do admin (banco, valem para o nome inteiro).
+let banlistCache: { at: number; matcher: BanMatcher } | null = null;
 
-export async function getBanlistNormalized(): Promise<Set<string>> {
-  if (banlistCache && Date.now() - banlistCache.at < 60_000) return banlistCache.names;
+export async function getBanlist(): Promise<BanMatcher> {
+  if (banlistCache && Date.now() - banlistCache.at < 60_000) return banlistCache.matcher;
+  const matcher = buildOfficialMatcher();
   const rows = await prisma.banlistEntry.findMany({ select: { cardName: true } });
-  banlistCache = { at: Date.now(), names: new Set(rows.map((r) => fold(r.cardName))) };
-  return banlistCache.names;
+  for (const r of rows) {
+    // entrada do admin bane todas as impressões do nome, mesmo que a oficial
+    // seja mais restrita
+    matcher.set(fold(r.cardName), null);
+  }
+  banlistCache = { at: Date.now(), matcher };
+  return matcher;
 }
 
 export function invalidateBanlistCache() {
@@ -101,10 +110,10 @@ export async function searchCards(params: CardSearchParams): Promise<CardHit[]> 
     LIMIT ${limit}
   `);
 
-  const banlist = await getBanlistNormalized();
+  const banlist = await getBanlist();
   return rows.map((r) => ({
     ...r,
-    banned: banlist.has(fold(r.name)),
+    banned: isCardBanned(banlist, r),
   }));
 }
 

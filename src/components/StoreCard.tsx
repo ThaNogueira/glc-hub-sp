@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { WEEKDAYS_PT } from "@/lib/types";
+import type { PokemonType } from "@prisma/client";
+import { TypeIcon } from "./TypeIcon";
+import { TYPE_BY_ID, WEEKDAYS_PT } from "@/lib/types";
 
 export type StoreCardData = {
   slug: string;
@@ -9,13 +11,16 @@ export type StoreCardData = {
   status: "ACTIVE" | "HIATUS";
   badgeCount: number;
   slots: { weekday: number; time: string | null }[];
+  topType: PokemonType | null;
+  topTypeWins: number;
 };
 
-/** Carteirinha de loja: status, grade semanal e insígnias entregues. */
+/** Carteirinha de loja: status, grade semanal, insígnias e tipo mais forte. */
 export function StoreCard({ store }: { store: StoreCardData }) {
+  const top = store.topType ? TYPE_BY_ID[store.topType] : null;
   return (
     <Link href={`/lojas/${store.slug}`} className="hover-card store-card">
-      <div className="flex-between" style={{ alignItems: "start" }}>
+      <div className="flex-between" style={{ alignItems: "flex-start" }}>
         <div>
           <h3>{store.name}</h3>
           <span className="small muted">
@@ -42,6 +47,17 @@ export function StoreCard({ store }: { store: StoreCardData }) {
         </strong>{" "}
         insígnias entregues
       </p>
+      {top && (
+        <p
+          className="small store-top-type"
+          style={{ ["--tt-color" as string]: `var(${top.cssVar})` }}
+          title={`Tipo com mais vitórias na loja: ${top.pt} (${store.topTypeWins})`}
+        >
+          <TypeIcon type={top.id} size={15} />
+          tipo mais forte: <strong>{top.pt}</strong>
+          <span className="muted tnum">×{store.topTypeWins}</span>
+        </p>
+      )}
     </Link>
   );
 }

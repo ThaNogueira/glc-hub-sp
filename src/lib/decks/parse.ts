@@ -1,6 +1,7 @@
 import type { Card } from "@prisma/client";
-import { findByName, findByPtcgoCode, getBanlistNormalized } from "../cards/search";
+import { findByName, findByPtcgoCode, getBanlist } from "../cards/search";
 import { fold } from "../normalize";
+import { isCardBanned, type BanMatcher } from "../banlistOficial";
 import type { GlcCard } from "../glc";
 
 /**
@@ -9,7 +10,7 @@ import type { GlcCard } from "../glc";
  * contra a base local e reporta as não reconhecidas.
  */
 
-export function cardToGlc(card: Card, banlist: Set<string>): GlcCard {
+export function cardToGlc(card: Card, banlist: BanMatcher): GlcCard {
   return {
     id: card.id,
     name: card.name,
@@ -29,7 +30,7 @@ export function cardToGlc(card: Card, banlist: Set<string>): GlcCard {
     isAceSpec: card.isAceSpec,
     isBasicEnergy: card.isBasicEnergy,
     glcLegal: card.glcLegal,
-    banned: banlist.has(fold(card.name)),
+    banned: isCardBanned(banlist, card),
   };
 }
 
@@ -45,7 +46,7 @@ const LINE_RE =
 const HEADER_RE = /^(pok[eé]mon|trainer|treinador(?:es)?|energy|energia)s?\s*[:(-]?\s*\d*\s*\)?$/i;
 
 export async function parseDeckText(text: string): Promise<ParsedDeck> {
-  const banlist = await getBanlistNormalized();
+  const banlist = await getBanlist();
   const byName = new Map<string, { card: GlcCard; quantity: number }>();
   const unresolved: string[] = [];
 
